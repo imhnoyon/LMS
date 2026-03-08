@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'apps.users',
     'apps.students',
+    'apps.organizations',
+    'apps.instructors',
 ]
 
 AUTH_USER_MODEL = 'users.User'
