@@ -67,7 +67,7 @@ class Course(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     def __str__(self):
         return self.title
     
@@ -106,9 +106,7 @@ class Comment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     
-
-
-
+# Reviews model ------
 class Review(models.Model):
     course=models.ForeignKey(Course,on_delete=models.CASCADE, related_name="reviews")
     user=models.ForeignKey(User,on_delete=models.CASCADE , related_name="reviews")
@@ -120,7 +118,6 @@ class Review(models.Model):
     
     class Meta:
         unique_together = ["course", "user"]
-
 
 
 
