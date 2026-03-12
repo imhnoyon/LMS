@@ -121,6 +121,30 @@ class Review(models.Model):
 
 
 
+# Live class or session -----
+class LiveSession(models.Model):
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('live', 'Live'),
+        ('ended', 'Ended'),
+        ('cancelled', 'Cancelled'),
+    ]
+    lecture = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='live_session')
+    instructor = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    meeting_url = models.URLField()          # Zoom/Google Meet link
+    meeting_id = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    scheduled_at = models.DateTimeField()
+    duration_minutes = models.PositiveIntegerField(default=60)
+    recording_url = models.URLField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        db_table = 'live_sessions'
+ 
+    def __str__(self):
+        return f"Live: {self.title} at {self.scheduled_at}"
 
 
 
