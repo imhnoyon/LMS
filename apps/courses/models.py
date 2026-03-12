@@ -147,7 +147,7 @@ class LiveSession(models.Model):
         return f"Live: {self.title} at {self.scheduled_at}"
 
 
-
+   
 """
 Written by Mahedi Hasan Noyon
 """

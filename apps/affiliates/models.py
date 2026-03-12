@@ -18,3 +18,8 @@ class Affiliate(models.Model):
         return f"{self.user} - Affiliate"
     
  
+ 
+ 
+"""
+Written by Mahedi Hasan Noyon
+"""
