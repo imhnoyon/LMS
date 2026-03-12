@@ -1,153 +1,277 @@
 from django.db import models
 from users.models import User
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 
-# Course Category Model--------
+
 class Category(models.Model):
-    CHOICES=[
-            ('certified', 'Certified'),
-            ('popular', 'Popular'),
-            ('none', 'None')
-        ]
-    name = models.CharField(max_length=200)
-    slug = models.SlugField(unique=True)
-    code = models.CharField(max_length=20)   # Like MED-01, EDU-02
-    description = models.TextField()
-    icon = models.CharField(max_length=100, blank=True, null=True)
-    badge = models.CharField(max_length=50,choices=CHOICES,default='none')
-    
-    
-# Sub-Category Model-------
-class SubCategory(models.Model):
-    category = models.ForeignKey(Category,on_delete=models.CASCADE,related_name="subcategories")
-    name = models.CharField(max_length=150)
-    slug = models.SlugField(unique=True)
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    name        = models.CharField(max_length=100, unique=True)
+    slug        = models.SlugField(unique=True)
+    description = models.TextField(null=True, blank=True)
+    parent      = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='subcategories')
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
     def __str__(self):
-        return f"{self.category.name} - {self.name}"
-    
-# Course Model --------
+        return self.name
+
+
 class Course(models.Model):
-    LEVEL_CHOICES = [
-        ('beginner', 'Beginner'),
-        ('intermediate', 'Intermediate'),
-        ('advanced', 'Advanced'),
-    ]
-
     LANGUAGE_CHOICES = [
-        ('english', 'English'),
-        ('bangla', 'Bangla'),
+        ('en', 'English'),
+        ('es', 'Spanish'),
+        ('fr', 'French'),
+        ('de', 'German'),
+        ('zh', 'Chinese'),
     ]
-    CHOICES=[
-            ('draft', 'Draft'),
-            ('pending', 'Pending Review'),
-            ('published', 'Published')
-        ]
-    title = models.CharField(max_length=80)
-    subtitle = models.CharField(max_length=120)
-    
-    instructor = models.ForeignKey(User,on_delete=models.CASCADE,related_name='instructor_courses')
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='courses')
-    sub_category = models.ForeignKey(SubCategory,on_delete=models.SET_NULL,null=True,blank=True)
-    
-    topic = models.CharField(max_length=200)
-    language = models.CharField(max_length=20,choices=LANGUAGE_CHOICES, default='english')
-    level = models.CharField(max_length=20,choices=LEVEL_CHOICES)
-    price = models.DecimalField(max_digits=8,decimal_places=2)
-    discount_price = models.DecimalField(max_digits=8,decimal_places=2,null=True,blank=True)
-    coupon_code = models.CharField(max_length=50,blank=True,null=True)
-    coupon_expiry = models.CharField(max_length=50,blank=True,null=True)
-    thumbnail = models.ImageField(upload_to="courses/thumbnails/",null=True,blank=True)
-    trailer_video = models.FileField(upload_to="courses/trailers/",null=True,blank=True)
-    description = models.TextField()
-    status = models.CharField(max_length=20,choices=CHOICES,default='draft')
+    LEVEL_CHOICES = [
+        ('beginner',     'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced',     'Advanced'),
+    ]
+    STATUS_CHOICES = [
+        ('draft',     'Draft'),
+        ('published', 'Published'),
+        ('archived',  'Archived'),
+    ]
+    EXPIRY_CHOICES = [
+        ('limited',  'Limited Time'),
+        ('lifetime', 'Lifetime'),
+    ]
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    instructor     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
+    title          = models.CharField(max_length=80)
+    subtitle       = models.CharField(max_length=120, blank=True)
+    category       = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='courses')
+    topic          = models.CharField(max_length=255, blank=True)
+    language       = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, blank=True)
+    level          = models.CharField(max_length=20, choices=LEVEL_CHOICES, blank=True)
+    price          = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    discount_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    coupon_code    = models.CharField(max_length=50, blank=True)
+    expiry_type    = models.CharField(max_length=20, choices=EXPIRY_CHOICES, default='lifetime')
+    status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.title
-    
-    
-# Course Learning ---- 
-class CourseLearning(models.Model):
-    course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name="learnings")
-    title = models.CharField(max_length=120)
-    
-    
-# Course Requirements ----
-class CourseRequirement(models.Model):
-    course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name="requirements")
-    title = models.CharField(max_length=120)
-    
-    
-# Course Section Model ----
-class CourseSection(models.Model):
-    course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name="sections")
-    title = models.CharField(max_length=255)
 
 
-# Lecture Model ----
-class Lecture(models.Model):
-    section = models.ForeignKey(CourseSection,on_delete=models.CASCADE,related_name="lectures")
-    title = models.CharField(max_length=255)
-    video = models.FileField(upload_to="courses/lectures/")
+class CourseAdvanceInfo(models.Model):
+    course        = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='advance_info')
+    thumbnail     = models.ImageField(upload_to='course/thumbnails/', null=True, blank=True)
+    trailer_video = models.FileField(upload_to='course/trailers/', null=True, blank=True)
+    description   = models.TextField(blank=True)
 
-# Course Comment Model ----
-class Comment(models.Model):
-    course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name="comments")
-    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name="comments")
-    message = models.TextField()
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    
-# Reviews model ------
-class Review(models.Model):
-    course=models.ForeignKey(Course,on_delete=models.CASCADE, related_name="reviews")
-    user=models.ForeignKey(User,on_delete=models.CASCADE , related_name="reviews")
-    ratings=models.PositiveIntegerField(validators=[MinValueValidator(1),MaxValueValidator(5)])
-    feedback=models.TextField()
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ["course", "user"]
-
-
-
-# Live class or session -----
-class LiveSession(models.Model):
-    STATUS_CHOICES = [
-        ('scheduled', 'Scheduled'),
-        ('live', 'Live'),
-        ('ended', 'Ended'),
-        ('cancelled', 'Cancelled'),
-    ]
-    lecture = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='live_session')
-    instructor = models.ForeignKey(User, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255)
-    meeting_url = models.URLField()          # Zoom/Google Meet link
-    meeting_id = models.CharField(max_length=100, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
-    scheduled_at = models.DateTimeField()
-    duration_minutes = models.PositiveIntegerField(default=60)
-    recording_url = models.URLField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
- 
-    class Meta:
-        db_table = 'live_sessions'
- 
     def __str__(self):
-        return f"Live: {self.title} at {self.scheduled_at}"
+        return f"Advance Info - {self.course.title}"
 
 
+class CourseOutcome(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='outcomes')
+    text   = models.CharField(max_length=120)
+    order  = models.PositiveIntegerField(default=0)
 
-"""
-Written by Mahedi Hasan Noyon
-"""
+    class Meta:
+        ordering = ['order']
+
+
+class CourseRequirement(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='requirements')
+    text   = models.CharField(max_length=120)
+    order  = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+
+class Section(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='sections')
+    name   = models.CharField(max_length=255)
+    order  = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.course.title} - {self.name}"
+
+
+class Lecture(models.Model):
+    section     = models.ForeignKey(Section, on_delete=models.CASCADE, related_name='lectures')
+    name        = models.CharField(max_length=255)
+    order       = models.PositiveIntegerField(default=0)
+    description = models.TextField(blank=True)
+    notes_text  = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.name
+
+
+class LectureVideo(models.Model):
+    lecture    = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='video')
+    video_file = models.FileField(upload_to='lectures/videos/')
+    duration   = models.DurationField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Video - {self.lecture.name}"
+
+
+class LectureAttachment(models.Model):
+    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='attachments')
+    file    = models.FileField(upload_to='lectures/attachments/')
+    name    = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"Attachment - {self.lecture.name}"
+
+
+class LectureCaption(models.Model):
+    lecture  = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='captions')
+    language = models.CharField(max_length=50)
+    file     = models.FileField(upload_to='lectures/captions/')
+
+    def __str__(self):
+        return f"Caption ({self.language}) - {self.lecture.name}"
+
+
+class LectureNoteFile(models.Model):
+    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='note_files')
+    file    = models.FileField(upload_to='lectures/notes/')
+    name    = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"Note File - {self.lecture.name}"
+
+
+class Quiz(models.Model):
+    lecture            = models.OneToOneField(Lecture, on_delete=models.CASCADE, null=True, blank=True, related_name='quiz')
+    section            = models.ForeignKey(Section, on_delete=models.CASCADE, null=True, blank=True, related_name='quizzes')
+    title              = models.CharField(max_length=255)
+    description        = models.TextField(blank=True)
+    time_limit_minutes = models.PositiveIntegerField(default=10)
+    attempts_allowed   = models.PositiveIntegerField(default=3)
+    passing_score      = models.PositiveIntegerField(default=70)
+    shuffle_questions  = models.BooleanField(default=False)
+
+    def clean(self):
+        if not self.lecture and not self.section:
+            raise ValidationError("Quiz must belong to either a Lecture or a Section.")
+
+    def __str__(self):
+        return self.title
+
+
+class Question(models.Model):
+    QUESTION_TYPE_CHOICES = [
+        ('mcq',        'Multiple Choice'),
+        ('true_false', 'True or False'),
+        ('answers',    'Question Answers'),
+    ]
+
+    quiz          = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
+    question_type = models.CharField(max_length=20, choices=QUESTION_TYPE_CHOICES, default='mcq')
+    text          = models.TextField()
+    order         = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"Q{self.order}: {self.text[:60]}"
+
+
+class QuestionOption(models.Model):
+    question   = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='options')
+    text       = models.CharField(max_length=255)
+    is_correct = models.BooleanField(default=False)
+    order      = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"Option: {self.text}"
+
+
+class TrueFalseAnswer(models.Model):
+    question       = models.OneToOneField(Question, on_delete=models.CASCADE, related_name='true_false_answer')
+    correct_answer = models.BooleanField()
+
+    def __str__(self):
+        return f"{'True' if self.correct_answer else 'False'} - {self.question}"
+
+
+class Comment(models.Model):
+    course     = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='comments')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_comments')
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        if self.parent:
+            return f"Reply by {self.user.username} on {self.course.title}"
+        return f"Comment by {self.user.username} on {self.course.title}"
+
+
+class Review(models.Model):
+    course     = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='reviews')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_reviews')
+    rating     = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment    = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('course', 'user')
+
+    def __str__(self):
+        return f"Review by {self.user.username} - {self.rating} Stars"
+
+
+class LiveClass(models.Model):
+    PLATFORM_CHOICES = [
+        ('google_meet', 'Google Meet'),
+        ('zoom',        'Zoom'),
+    ]
+
+    title            = models.CharField(max_length=80)
+    instructor       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='live_classes')
+    course           = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='live_classes')
+    topic            = models.TextField()
+    scheduled_date   = models.DateField()
+    scheduled_time   = models.TimeField()
+    duration_minutes = models.PositiveIntegerField(default=60)
+    platform         = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    class_link       = models.URLField()
+    is_recorded      = models.BooleanField(default=False)
+    recording_link   = models.URLField(blank=True, null=True)
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} — {self.scheduled_date}"
+
+
+class LiveClassAttendance(models.Model):
+    STATUS_CHOICES = [
+        ('attended', 'Attended'),
+        ('missed',   'Missed'),
+    ]
+
+    live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name='attendances')
+    student    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendances')
+    status     = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    joined_at  = models.DateTimeField(null=True, blank=True)
+    left_at    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('live_class', 'student')
+
+    def __str__(self):
+        return f"{self.student} — {self.live_class} ({self.status})"
