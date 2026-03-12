@@ -50,6 +50,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'apps.users',
+    'apps.core',
     'apps.courses',
     'apps.affiliates',
     'apps.analytics',

@@ -26,6 +26,7 @@ urlpatterns = [
     
     # API Endpoints
     path('api/', include([
+        path('core/', include('apps.core.urls')),
         path('users/', include('apps.users.urls')),
         path('courses/', include('apps.courses.urls')),
         path('affiliates/', include('apps.affiliates.urls')),

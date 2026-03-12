@@ -1,8 +1,8 @@
 from django.urls import path
-from apps.users import views
+from apps.orders import views
 
 
-# Users app URLs
+# Orders app URLs
 urlpatterns = [
     
 ]
