@@ -1,7 +1,8 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
 
+# Create your models here.
 class UserManager(BaseUserManager):
     def create_user(self, email, username, password=None, **extra_fields):
         if not email:
@@ -18,33 +19,62 @@ class UserManager(BaseUserManager):
         return self.create_user(email, username, password, **extra_fields)
 
 
-class User(AbstractBaseUser):
-    class Role(models.TextChoices):
-        ADMIN = 'admin'
-        INSTRUCTOR = 'instructor'
-        STUDENT = 'student'
+class User(AbstractBaseUser, PermissionsMixin):
+    ROLE_CHOICES = [
+        ("student", "Student"),
+        ("instructor", "Instructor"),
+        ("owner", "Owner"),
+        ("member", "Member"),
+        ("affiliate", "Affiliate"),
+        ("admin", "Admin"),
+    ]
+    
+    email     = models.EmailField(unique=True)
+    role = models.CharField(max_length=30, choices=ROLE_CHOICES, default="student", db_index=True)
+    username    = models.CharField(max_length=150, unique=True)
+    phone       = models.CharField(max_length=20, blank=True)
+    avatar      = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    is_verified = models.BooleanField(default=False)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
 
-    class Status(models.TextChoices):
-        ACTIVE = 'active'
-        INACTIVE = 'inactive'
-        SUSPENDED = 'suspended'
-
-    user_id = models.AutoField(primary_key=True)
-    email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True)
-    username = models.CharField(max_length=150, unique=True)
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.STUDENT)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
-    last_active = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    USERNAME_FIELD  = "email"
+    REQUIRED_FIELDS = ["username"]
 
     objects = UserManager()
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
-
     class Meta:
-        db_table = 'users'
+        verbose_name        = "User"
+        verbose_name_plural = "Users"
+        ordering            = ["-created_at"]
 
     def __str__(self):
-        return self.email
+        return f"{self.email} ({self.get_role_display()})"
+    
+
+    @property
+    def is_student(self):
+        return self.role == "student"
+
+    @property
+    def is_instructor(self):
+        return self.role == "instructor"
+
+    @property
+    def is_owner(self):
+        return self.role == "owner"
+
+    @property
+    def is_member(self):
+        return self.role == "member"
+
+    @property
+    def is_affiliate(self):
+        return self.role == "affiliate"
+
+    @property
+    def is_admin(self):
+        return self.role == "admin" or self.is_superuser
+    
+    
+    
