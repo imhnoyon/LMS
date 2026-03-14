@@ -35,6 +35,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone       = models.CharField(max_length=20, blank=True)
     avatar      = models.ImageField(upload_to="avatars/", blank=True, null=True)
     is_verified = models.BooleanField(default=False)
+    is_terms_service = models.BooleanField(default=False)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
 
@@ -77,4 +78,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.role == "admin" or self.is_superuser
     
     
-    
+# For email verification and password reset codes
+class VerificationCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    code = models.CharField(max_length=4)
+    expires_at = models.DateTimeField()
+    purpose = models.CharField(max_length=20,choices=(("verify", "verify"), ("reset", "reset")))
