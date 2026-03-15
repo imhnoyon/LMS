@@ -37,4 +37,5 @@ class InstructorRegisterSerializer(serializers.ModelSerializer):
             is_terms_service=validated_data["is_terms_service"],
             role="instructor"
         )
+       
         return user
