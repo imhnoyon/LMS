@@ -3,7 +3,7 @@ from users.models import User
 
 
 class Affiliate(models.Model):
-    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name="affiliate_profile")
+    user = models.OneToOneField(User,on_delete=models.CASCADE,related_name="affiliate_profile")
     
     referral_code = models.CharField(max_length=50, unique=True)
     commission_rate = models.DecimalField(max_digits=5,decimal_places=2)  
