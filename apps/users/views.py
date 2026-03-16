@@ -33,6 +33,7 @@ class RegisterAPIView(APIView):
             )
         user = serializer.save()
         # For verification email, you would typically generate a code and send an email here.
+        
         """"
         apply email sending logic here,
         code = generate_verification_code()
