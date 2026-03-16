@@ -1,11 +1,15 @@
-from django.shortcuts import render
+from datetime import timedelta, timezone
+
+from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
+from apps.organizations.models import MemberInvitation, Organization
 from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
 from apps.students.serializers import LearnerRegisterSerializer
-from apps.utils.responses import APIResponse
+from apps.affiliates.serializers import AffiliateRegisterSerializer
+from utils.api_response import APIResponse
 # Create your views here.
 
 class RegisterAPIView(APIView):
@@ -20,18 +24,15 @@ class RegisterAPIView(APIView):
             serializer = LearnerRegisterSerializer(data=request.data)
         elif register_type == "instructor":
             serializer = InstructorRegisterSerializer(data=request.data)
+        elif register_type == "affiliate":
+            serializer = AffiliateRegisterSerializer(data=request.data)
         else:
-            return APIResponse.error(
-                message="Invalid registration type.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
+            return APIResponse.error(message="Invalid registration type.",status_code=status.HTTP_400_BAD_REQUEST)
+        
         if not serializer.is_valid():
-            return APIResponse.error(
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(errors=serializer.errors,status_code=status.HTTP_400_BAD_REQUEST)
         user = serializer.save()
+        
         # For verification email, you would typically generate a code and send an email here.
         
         """"
@@ -43,3 +44,7 @@ class RegisterAPIView(APIView):
             data={"id": str(user.id)},
             status_code=status.HTTP_201_CREATED
         )
+        
+        
+        
+        

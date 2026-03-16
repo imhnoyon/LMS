@@ -9,13 +9,13 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["username","email","password","confirm_password","organization_name","is_terms_service",]
+        fields = ["full_name","email","password","confirm_password","organization_name","is_terms_service",]
         extra_kwargs = {
             "password": {"write_only": True, "min_length": 8}
         }
-    def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username already exists.")
+    def validate_full_name(self, value):
+        if User.objects.filter(full_name=value).exists():
+            raise serializers.ValidationError("Full name already exists.")
         return value
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -31,6 +31,7 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
                 "is_terms_service": "You must accept the terms and conditions."
             })
         return attrs
+    
     @transaction.atomic
     def create(self, validated_data):
         validated_data.pop("confirm_password")
@@ -38,7 +39,7 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
         organization_name = organization_data["name"]
 
         user = User.objects.create_user(
-            username=validated_data["username"],
+            full_name=validated_data["full_name"],
             email=validated_data["email"],
             password=validated_data["password"],
             is_terms_service=validated_data["is_terms_service"],

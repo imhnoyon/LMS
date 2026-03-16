@@ -9,17 +9,13 @@ class StudentProfile(models.Model):
         OTHER = 'other'
 
     student_id = models.AutoField(primary_key=True)
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='student_profile',
-    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='student_profile',)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=Gender.choices, blank=True)
     bio = models.TextField(blank=True)
-    profile_photo = models.CharField(max_length=255, blank=True)
+    profile_photo = models.ImageField(upload_to='student_photos/', blank=True, null=True)
 
     class Meta:
         db_table = 'student_profiles'
