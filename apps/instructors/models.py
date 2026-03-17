@@ -8,28 +8,15 @@ class InstructorProfile(models.Model):
         FREELANCER = 'freelancer'
 
     instructor_id = models.AutoField(primary_key=True)
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='instructor_profile',
-    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='instructor_profile',)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     bio = models.TextField(blank=True)
     expertise = models.CharField(max_length=255, blank=True)
-    profile_photo = models.CharField(max_length=255, blank=True)
-    instructor_type = models.CharField(
-        max_length=20,
-        choices=InstructorType.choices,
-        default=InstructorType.FREELANCER,
-    )
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='instructors',
-    )
+    profile_photo = models.ImageField(upload_to='instructor_photos/', blank=True, null=True)
+    
+    instructor_type = models.CharField(max_length=20,choices=InstructorType.choices,default=InstructorType.FREELANCER,)
+    organization = models.ForeignKey('organizations.Organization',on_delete=models.SET_NULL,null=True,blank=True,related_name='instructors',)
 
     class Meta:
         db_table = 'instructor_profiles'

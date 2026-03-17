@@ -6,7 +6,7 @@ class LearnerRegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
     class Meta:
         model = User
-        fields = ["username", "email", "password", "confirm_password", "is_terms_service"]
+        fields = ["full_name", "email", "password", "confirm_password", "is_terms_service"]
         extra_kwargs = {
             "password": {"write_only": True, "min_length": 8}
         }
@@ -29,7 +29,7 @@ class LearnerRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop("confirm_password")
         user = User.objects.create_user(
-            username=validated_data["username"],
+            full_name=validated_data["full_name"],
             email=validated_data["email"],
             password=validated_data["password"],
             is_terms_service=validated_data["is_terms_service"],
