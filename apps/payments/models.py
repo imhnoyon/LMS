@@ -1,8 +1,8 @@
 from django.db import models
-from users.models import User
-from orders.models import Order
+from apps.users.models import User
+from apps.orders.models import Order
 from django.utils import timezone
-from courses.models import Course
+from apps.courses.models import Course
 class Payment(models.Model):
     STATUS_CHOICES = (
         ("pending", "Pending"),

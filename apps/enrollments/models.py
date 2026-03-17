@@ -1,10 +1,9 @@
-from time import timezone
+from django.utils import timezone
 import uuid
-
 from django.db import models
-from users.models import User
-from courses.models import Course
-from orders.models import Order
+from apps.users.models import User
+from apps.courses.models import Course
+from apps.orders.models import Order
 
 
 # Student Enrollment model ----  
@@ -29,7 +28,7 @@ class Certificate(models.Model):
     
     course_title = models.CharField(max_length=255)
     certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    issue_date = models.DateField(default=timezone.now)
+    issue_date = models.DateField(auto_now_add=True)
     
     class Meta:
         ordering = ["-issue_date"]
