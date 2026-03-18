@@ -15,7 +15,7 @@ class UserManager(BaseUserManager):
 
     def create_superuser(self, email, full_name, password=None, **extra_fields):
         extra_fields.setdefault('role', 'admin')
-        extra_fields.setdefault('status', 'active')
+        # extra_fields.setdefault('status', 'active')
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         
@@ -40,7 +40,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     email     = models.EmailField(unique=True)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default="student", db_index=True)
-    full_name = models.CharField(max_length=150)
+    full_name = models.CharField(max_length=150,null=True, blank=True)
     phone       = models.CharField(max_length=20, blank=True)
     avatar      = models.ImageField(upload_to="avatars/", blank=True, null=True)
     is_verified = models.BooleanField(default=False)
@@ -91,6 +91,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 # For email verification and password reset codes
 class VerificationCode(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    code = models.CharField(max_length=4)
+    code = models.CharField(max_length=6)
     expires_at = models.DateTimeField()
     purpose = models.CharField(max_length=20,choices=(("verify", "verify"), ("reset", "reset")))

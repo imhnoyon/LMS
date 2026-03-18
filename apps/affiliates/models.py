@@ -1,6 +1,6 @@
 from django.db import models
-from courses.models import Course
-from users.models import User
+from apps.courses.models import Course
+from apps.users.models import User
 from django.utils.crypto import get_random_string
 
 class Affiliate(models.Model):
@@ -52,6 +52,7 @@ class AffiliateCommission(models.Model):
     product = models.ForeignKey(Course, on_delete=models.CASCADE)
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2)
     
+    created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
         

@@ -10,7 +10,7 @@ User = get_user_model()
 # HUMAN CHAT
 # ══════════════════════════════════════════════════════════════════
 class Conversation(models.Model):
-    participants = models.ManyToManyField(User, on_delete=models.CASCADE, related_name='conversations')
+    participants = models.ManyToManyField(User, related_name='conversations')
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
 

@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from apps.organizations.models import Organization
+
 
 class InstructorProfile(models.Model):
     class InstructorType(models.TextChoices):
@@ -16,7 +18,7 @@ class InstructorProfile(models.Model):
     profile_photo = models.ImageField(upload_to='instructor_photos/', blank=True, null=True)
     
     instructor_type = models.CharField(max_length=20,choices=InstructorType.choices,default=InstructorType.FREELANCER,)
-    organization = models.ForeignKey('organizations.Organization',on_delete=models.SET_NULL,null=True,blank=True,related_name='instructors',)
+    organization = models.ForeignKey(Organization,on_delete=models.SET_NULL,null=True,blank=True,related_name='instructors',)
 
     class Meta:
         db_table = 'instructor_profiles'

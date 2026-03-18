@@ -11,11 +11,11 @@ User = get_user_model()
 
 # Create your models here.
 class Organization(models.Model):
-    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name="organization", limit_choices_to={"role": "owner"})
+    owner = models.OneToOneField(User, on_delete=models.CASCADE,null=True,blank=True, related_name="organization", limit_choices_to={"role": "owner"})
 
     # ── Basic Info ────────────────────────────────────
     name     = models.CharField(max_length=255)
-    bio      = models.TextField(blank=True)
+    bio      = models.TextField(blank=True,null=True, help_text="Short description about the organization")
 
     # ── Media — Screen 1, 2, 13 ───────────────────────
     photo  = models.ImageField(upload_to="org/photos/",  blank=True, null=True)

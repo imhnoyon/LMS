@@ -1,7 +1,7 @@
 from django.db import models
-from users.models import User
+from apps.users.models import User
 from decimal import Decimal
-from courses.models import Course
+from apps.courses.models import Course
 from django.utils import timezone
 import random
 import string

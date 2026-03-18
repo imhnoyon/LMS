@@ -59,6 +59,9 @@ INSTALLED_APPS = [
     'apps.enrollments',
     'apps.orders',
     'apps.messaging',
+    'apps.organizations',
+    'apps.instructors',
+    'apps.students',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -68,6 +71,7 @@ AUTH_USER_MODEL = 'users.User'
 # --------------------------------------------------
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -182,7 +186,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.JWTAuthentication",
+         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
