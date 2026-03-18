@@ -1,3 +1,30 @@
 from django.contrib import admin
+from .models import Payment,PaymentGateway,Transaction,RevenueDistribution,PaymentMethod,Wallet,Payout,Withdrawal,DailyRevenueSnapshot
 
-# Register your models here.
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'amount','payment_method', 'currency', 'status','transaction_id','gateway_payment_id','paid_at', 'created_at')
+    list_filter  = ('status', 'created_at')
+    search_fields = ('user__full_name', 'payment_id')
+    
+    
+@admin.register(PaymentGateway)
+class PaymentGatewayAdmin(admin.ModelAdmin):
+    list_display = ('name','gateway_type','target','balance','is_active','last_checked', )
+    list_filter  = ('is_active', )
+    search_fields = ('name',)
+    
+    
+    
+@admin.register(Transaction)
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = ('user','course','transaction_id',  'amount', 'method', 'status', 'created_at')
+    list_filter  = ('status', 'method', 'created_at')
+    search_fields = ('transaction_id',)
+    
+    
+@admin.register(RevenueDistribution)
+class RevenueDistributionAdmin(admin.ModelAdmin):
+    list_display = ('platform_pct', 'organization_pct', 'instructor_pct', 'effective_date')
