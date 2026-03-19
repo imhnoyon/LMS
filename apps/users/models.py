@@ -68,7 +68,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
 
     is_verified = models.BooleanField(default=False)
-    is_terms_service = models.BooleanField(default=False)
+    accepted_terms = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

@@ -1,119 +1,107 @@
-from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth import get_user_model
 from apps.courses.models import Course
-import uuid
 from django.utils import timezone
+from django.db.models import Q
+from datetime import timedelta
+from django.db import models
+import uuid
 
 
 User = get_user_model()
 
 
+def default_expiry():
+    return timezone.now() + timedelta(days=7)
+
+
 # Create your models here.
 class Organization(models.Model):
-    owner = models.OneToOneField(User, on_delete=models.CASCADE,null=True,blank=True, related_name="organization", limit_choices_to={"role": "owner"})
-
-    # ── Basic Info ────────────────────────────────────
-    name     = models.CharField(max_length=255)
-    bio      = models.TextField(blank=True,null=True, help_text="Short description about the organization")
-
-    # ── Media — Screen 1, 2, 13 ───────────────────────
-    photo  = models.ImageField(upload_to="org/photos/",  blank=True, null=True)
+    name = models.CharField(max_length=255)
+    bio = models.TextField(blank=True, null=True, help_text="Short description about the organization")
+    photo = models.ImageField(upload_to="org/photos/", blank=True, null=True)
     banner = models.ImageField(upload_to="org/banners/", blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True, help_text="Public contact email")
 
-    # ── Contact & Social ──────────────────────────────
-    phone    = models.CharField(max_length=20, blank=True)
-    email    = models.EmailField(blank=True, help_text="Public contact email (different from owner login email)")
-
-    # ── Stats & Ratings ──────────────────────────────
-    rating         = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)],)
-    total_reviews  = models.PositiveIntegerField(default=0)
+    rating = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])
+    total_reviews = models.PositiveIntegerField(default=0)
     total_students = models.PositiveIntegerField(default=0)
-    total_courses  = models.PositiveIntegerField(default=0)
+    total_courses = models.PositiveIntegerField(default=0)
 
-    # ── Status ────────────────────────────────────────
-    is_active   = models.BooleanField(default=True)
-    is_verified = models.BooleanField(default=False, db_index=True, help_text="Verified organizations are highlighted in search results and get a badge on their profile.")
+    is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False, db_index=True, help_text="Verified organizations get priority")
+
     verified_at = models.DateTimeField(null=True, blank=True)
     verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="verified_organizations")
 
-    # ── Timestamps ────────────────────────────────────
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name        = "Organization"
-        verbose_name_plural = "Organizations"
-        ordering            = ["-created_at"]
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["is_verified"])]
 
     def __str__(self):
         return self.name
 
-    # ── Helpers ───────────────────────────────────────
-
     def get_active_members(self):
-        return self.members.filter(status=Team.Status.ACTIVE)
+        return self.memberships.filter(status=Membership.Status.ACTIVE)
 
     def get_active_instructors(self):
-        return self.instructors.filter(status=Team.Status.ACTIVE)
+        return self.memberships.filter(role=Membership.Role.INSTRUCTOR, status=Membership.Status.ACTIVE)
 
     def get_member_count_by_status(self):
-        members = self.members.all()
+        members = self.memberships.all()
         return {
-            "total":     members.count(),
-            "active":    members.filter(status="active").count(),
-            "suspended": members.filter(status="suspended").count(),
-            "admins":    members.filter(role="admin").count(),
+            "total": members.count(),
+            "active": members.filter(status=Membership.Status.ACTIVE).count(),
+            "suspended": members.filter(status=Membership.Status.SUSPENDED).count(),
+            "admins": members.filter(role=Membership.Role.ADMIN).count(),
         }
 
     def get_instructor_count_by_status(self):
-        instructors = self.instructors.all()
+        instructors = self.memberships.filter(role=Membership.Role.INSTRUCTOR)
         return {
-            "total":         instructors.count(),
-            "active":        instructors.filter(status="active").count(),
-            "pending":       instructors.filter(status="pending").count(),
-            "total_courses": self.courses.filter(status="published").count(),
+            "total": instructors.count(),
+            "active": instructors.filter(status=Membership.Status.ACTIVE).count(),
         }
 
+    @property
+    def owner(self):
+        return self.memberships.filter(role=Membership.Role.ADMIN).order_by("joined_at").first()
 
-# ─────────────────────────────────────────
-# Team Management
-# ─────────────────────────────────────────
-class Team(models.Model):
+
+class Membership(models.Model):
     class Role(models.TextChoices):
-        ADMIN    = "admin",    "Admin"
-        MANAGER  = "manager",  "Manager"
-        TRAINER  = "trainer",  "Trainer"
-        FINANCE  = "finance",  "Finance"
+        ADMIN = "admin", "Admin"
+        MANAGER = "manager", "Manager"
+        INSTRUCTOR = "instructor", "Instructor"
+        FINANCE = "finance", "Finance"
         REVIEWER = "reviewer", "Reviewer"
 
     class Status(models.TextChoices):
-        ACTIVE    = "active",    "Active"
-        INVITED   = "invited",   "Invited"
+        ACTIVE = "active", "Active"
         SUSPENDED = "suspended", "Suspended"
-        REMOVED   = "removed",   "Removed"
 
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="teams")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
-    role       = models.CharField(max_length=30, choices=Role.choices, default=Role.TRAINER)
-    status     = models.CharField(max_length=20, choices=Status.choices, default=Status.INVITED)
-    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="sent_member_invitations")
-    last_login = models.DateTimeField(null=True, blank=True)
-    joined_at  = models.DateTimeField(auto_now_add=True)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="organization_memberships")
+
+    role = models.CharField(max_length=30, choices=Role.choices, default=Role.INSTRUCTOR)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+
+    joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together     = ("organization", "user")
-        verbose_name        = "Team"
-        verbose_name_plural = "Teams"
-        ordering            = ["role", "-joined_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "user"], name="unique_org_user")
+        ]
+        ordering = ["role", "-joined_at"]
+        indexes = [models.Index(fields=["organization", "user"])]
 
     def __str__(self):
         return f"{self.user.email} — {self.role} @ {self.organization.name}"
 
-
-# ─────────────────────────────────────────
-# Role Permission
-# ─────────────────────────────────────────
 
 class RolePermission(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="role_permissions")
@@ -142,19 +130,14 @@ class RolePermission(models.Model):
         return f"{self.organization.name} — {self.role_name} permissions"
 
 
-# ─────────────────────────────────────────
-# Contract
-# ─────────────────────────────────────────
-
 class Contract(models.Model):
-
     class Status(models.TextChoices):
         ONGOING   = "ongoing",   "Ongoing"
         EXPIRED   = "expired",   "Expired"
         CANCELLED = "cancelled", "Cancelled"
 
     organization  = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="contracts")
-    instructor = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contracts")
+    instructor = models.ForeignKey(Membership, on_delete=models.CASCADE, related_name="contracts")
     course = models.ForeignKey(Course, on_delete=models.CASCADE,related_name="contracts")
     revenue_share = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
     expiry_date = models.DateField()
@@ -180,39 +163,40 @@ class Contract(models.Model):
         super().save(*args, **kwargs)
 
 
-# ─────────────────────────────────────────
-# Member Invitation
-# ─────────────────────────────────────────
-
-class MemberInvitation(models.Model):
-
-    class InviteType(models.TextChoices):
-        TEAM_MEMBER = "team_member", "Team Member"
-        INSTRUCTOR  = "instructor",  "Instructor"
-
+class Invitation(models.Model):
     class Status(models.TextChoices):
-        PENDING  = "pending",  "Pending"
+        PENDING = "pending", "Pending"
         ACCEPTED = "accepted", "Accepted"
-        EXPIRED  = "expired",  "Expired"
-        REVOKED  = "revoked",  "Revoked"
+        REJECTED = "rejected", "Rejected"
+        EXPIRED = "expired", "Expired"
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="invitations")
-    invited_by = models.ForeignKey(User,on_delete=models.CASCADE, related_name="sent_invitations")
-    email       = models.EmailField()
-    invite_type = models.CharField(max_length=20, choices=InviteType.choices)
-    token      = models.UUIDField(default=uuid.uuid4, unique=True)
-    status     = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    created_at  = models.DateTimeField(auto_now_add=True)
-    expires_at  = models.DateTimeField()
-    accepted_at = models.DateTimeField(null=True, blank=True)
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_invitations")
+
+    email = models.EmailField()
+    role = models.CharField(max_length=30, choices=Membership.Role.choices, default=Membership.Role.INSTRUCTOR)
+
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=default_expiry)
 
     class Meta:
-        unique_together = ("organization", "email", "invite_type")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "email"],
+                condition=Q(status="pending"),
+                name="unique_pending_invitation"
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.email = self.email.lower().strip()
+        super().save(*args, **kwargs)
 
     def is_expired(self):
-        from django.utils import timezone
         return timezone.now() > self.expires_at
 
     def __str__(self):
-        return f"Invite → {self.email} as {self.invite_type} @ {self.organization.name}"
-
+        return f"Invite → {self.email} @ {self.organization.name}"
