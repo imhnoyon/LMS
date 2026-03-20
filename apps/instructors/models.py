@@ -1,20 +1,49 @@
-from django.conf import settings
 from django.db import models
-from apps.organizations.models import Organization
+from django.conf import settings
+import random
+import string
+import uuid
 
 
-class InstructorProfile(models.Model):
-    class InstructorType(models.TextChoices):
-        ORGANIZATION = 'organization'
-        FREELANCER = 'freelancer'
+# Create your models here.
+def generate_instructor_id():
+    max_attempts = 10
+    for _ in range(max_attempts):
+        new_id = 'INS-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if not Instructor.objects.filter(id=new_id).exists():
+            return new_id
+    return 'INS-' + str(uuid.uuid4()).upper().replace('-', '')[:6]
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='instructor_profile',)
-    bio = models.TextField(blank=True)
-    expertise = models.CharField(max_length=255, blank=True, null=True)
-    profile_photo = models.ImageField(upload_to='instructor_photos/', blank=True, null=True)
-    
-    instructor_type = models.CharField(max_length=20,choices=InstructorType.choices,default=InstructorType.FREELANCER)
-    organization = models.ForeignKey(Organization,on_delete=models.SET_NULL,null=True,blank=True,related_name='instructors')
+
+class Instructor(models.Model):
+    id = models.CharField(
+        primary_key=True,
+        max_length=10,
+        default=generate_instructor_id,
+        editable=False,
+        unique=True
+    )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="instructor"
+    )
+    title = models.CharField(max_length=100, blank=True, null=True)
+    biography = models.TextField(blank=True, null=True)
+    website = models.URLField(blank=True, null=True)
+    twitter = models.URLField(blank=True, null=True)
+    linkedin = models.URLField(blank=True, null=True)
+    youtube = models.URLField(blank=True, null=True)
+    current_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+    total_withdrawals = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+    is_approved = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'instructor_profiles'
+        db_table = "instructors"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.id} - {self.user.email}"

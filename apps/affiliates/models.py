@@ -1,49 +1,80 @@
-from django.db import models
 from apps.courses.models import Course
-from apps.users.models import User
-from django.utils.crypto import get_random_string
+from django.conf import settings
+from django.db import models
+import string
+import random
+import uuid
+
+
+# Create your models here.
+def generate_affiliate_id():
+    max_attempts = 10
+    for _ in range(max_attempts):
+        new_id = 'AFF-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if not Affiliate.objects.filter(id=new_id).exists():
+            return new_id
+    return 'AFF-' + str(uuid.uuid4()).upper().replace('-', '')[:6]
+
 
 class Affiliate(models.Model):
-    AFFILIATE_TYPES = [
-        ('partner', 'Partner'),
-        ('external', 'External'),
-        ('territorial', 'Territorial'),
-      ]
-    AFFILIATE_STATUS = [
-        ('pending', 'Pending'),
-        ('active', 'Active'),
-        ('inactive', 'Inactive'),
-        ('suspended', 'Suspended'),
-        ('rejected', 'Rejected'),
-      ] 
-    user = models.OneToOneField(User,on_delete=models.CASCADE,related_name="affiliate_profile")
-    
-    company_name = models.CharField(max_length=255, blank=True)
-    account_number = models.CharField(max_length=100, blank=True)
-    tax_id = models.CharField(max_length=100, blank=True)
-    address = models.CharField(max_length=255, blank=True)
-    profile_photo = models.ImageField(upload_to='affiliate_photos/', blank=True, null=True)
-    
-    referral_code = models.CharField(max_length=50, unique=True)
-    commission_rate = models.DecimalField(max_digits=5,decimal_places=2)  
-    total_earnings = models.DecimalField(max_digits=12,decimal_places=2,default=0.00)
-    
-    is_active = models.BooleanField(default=True)
-    affiliate_type = models.CharField(max_length=20, choices=AFFILIATE_TYPES, default='external')
-    status = models.CharField(max_length=20, choices=AFFILIATE_STATUS, default='pending')
+    AFFILIATE_TYPE_CHOICES = [
+        ("affiliate", "Affiliate"),
+        ("external_affiliate", "External Affiliate"),
+        ("territorial_orientation_center", "Territorial Orientation Center"),
+    ]
+
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+        ("suspended", "Suspended"),
+        ("pending", "Pending"),
+    ]
+
+    id = models.CharField(
+        primary_key=True,
+        max_length=20,
+        editable=False,
+        default=generate_affiliate_id,
+    )
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="affiliate_profile",
+        limit_choices_to={"role": "affiliate"},
+    )
+
+    affiliate_type = models.CharField(
+        max_length=50,
+        choices=AFFILIATE_TYPE_CHOICES,
+        default="affiliate",
+    )
+
+    iban = models.CharField(max_length=34)
+    tax_id = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+
+    total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    @property
+    def total_payable(self):
+        return self.total_earned - self.total_paid
 
     class Meta:
         ordering = ["-created_at"]
-        
-    def save(self, *args, **kwargs):
-        if not self.referral_code:
-            self.referral_code = get_random_string(10).upper()
-        super().save(*args, **kwargs)
-        
-    def __str__(self):
-        return f"{self.user} - Affiliate"
+        indexes = [
+            models.Index(fields=["status"]),
+        ]
 
+    def __str__(self):
+        return f"{self.user.email} — {self.id}"
 
 
 # Affiliate Commission Model

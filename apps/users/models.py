@@ -94,11 +94,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_owner(self):
-        return self.role == "owner"
+        return self.role == "owner" or self.is_superuser
 
     @property
     def is_admin(self):
-        return self.role == "admin" or self.is_superuser
+        return self.role == "admin"
 
     @property
     def is_manager(self):
