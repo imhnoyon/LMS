@@ -1,8 +1,8 @@
 from django.contrib import admin
-from .models import Ticket, FAQCategory, FAQ, PlatformConfiguration
+from .models import Contact, FAQCategory, FAQ, SiteConfig
 # Register your models here.
 
-@admin.register(Ticket)
+@admin.register(Contact)
 class TicketAdmin(admin.ModelAdmin):
     list_display = ('name', 'email', 'subject', 'status', 'created_at')
     list_filter = ('status', 'created_at')
@@ -23,7 +23,7 @@ class FAQAdmin(admin.ModelAdmin):
     search_fields = ('question',)
     
     
-@admin.register(PlatformConfiguration)
+@admin.register(SiteConfig)
 class PlatformConfigurationAdmin(admin.ModelAdmin):
     list_display = ('name', 'language', 'currency')
     search_fields = ('name',)
