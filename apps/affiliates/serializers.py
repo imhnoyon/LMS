@@ -8,7 +8,7 @@ from apps.users.models import User
 class AffiliateRegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
     company_name = serializers.CharField(source="Affiliate.company_name", required=True)
-    affiliate_type = serializers.ChoiceField(choices=Affiliate.AFFILIATE_TYPES, required=True)
+    affiliate_type = serializers.ChoiceField(choices=Affiliate.AFFILIATE_TYPE_CHOICES, required=True)
     account_number = serializers.CharField(source="Affiliate.account_number", required=True)
     tax_id = serializers.CharField(source="Affiliate.tax_id", required=True)
     address = serializers.CharField(source="Affiliate.address", required=True)

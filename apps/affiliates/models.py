@@ -89,12 +89,3 @@ class AffiliateCommission(models.Model):
         
     def __str__(self):
         return f"{self.affiliate.user.email} - {self.commission_rate}"
-    
-    
-    
-    
-    
-    
-"""
-Written by Mahedi Hasan Noyon
-"""

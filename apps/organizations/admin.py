@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Organization, Team, MemberInvitation, RolePermission,Contract
+from apps.organizations.models import *
 
 
 @admin.register(Organization)

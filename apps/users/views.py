@@ -1,21 +1,21 @@
 from datetime import timedelta, timezone
 import uuid
-
 from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
-from apps.organizations.models import MemberInvitation, Organization, User
+from apps.organizations.models import Invitation, Organization, User
 from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
 from apps.students.serializers import LearnerRegisterSerializer
 from apps.affiliates.serializers import AffiliateRegisterSerializer
 from utils.api_response import APIResponse
-from .models import VerificationCode
+from .models import OTP
 from utils.emails import *
-# Create your views here.
 
-# Registration view for different types user 
+
+
+# Create your views here.
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -39,7 +39,7 @@ class RegisterAPIView(APIView):
         
         # For verification email
         code = generate_otp()
-        VerificationCode.objects.create(
+        OTP.objects.create(
             user=user,
             code=code,
             expires_at=otp_expiry(),
@@ -65,8 +65,8 @@ class ResendVerificationCodeView(APIView):
         user = get_object_or_404(User, email=email)
         code = generate_otp()
         expires = otp_expiry()
-        VerificationCode.objects.filter(user=user, purpose="verify").delete()
-        VerificationCode.objects.create(user=user,code=code,expires_at=expires,purpose="verify")
+        OTP.objects.filter(user=user, purpose="verify").delete()
+        OTP.objects.create(user=user,code=code,expires_at=expires,purpose="verify")
         
         if user.email:
             send_verification_email(user.email, code)  
@@ -84,7 +84,7 @@ class VerifyEmailView(APIView):
     def post(self, request):
         user = get_object_or_404(User, id=request.data.get("user_id"))
         Code = request.data.get("code")
-        record = VerificationCode.objects.filter(user=user, code=Code, purpose="verify", expires_at__gte=timezone.now()).first()
+        record = OTP.objects.filter(user=user, code=Code, purpose="verify", expires_at__gte=timezone.now()).first()
         if not record:
             return APIResponse.error(message="Invalid code", status_code=status.HTTP_400_BAD_REQUEST)
         user.is_verified = True
@@ -124,7 +124,6 @@ class SignInView(APIView):
             }
         )  
         
-# Forgot pasword and reset password views 
 class ForgotPasswordView(APIView):
     def post(self, request):
         user = User.objects.filter(
@@ -135,7 +134,7 @@ class ForgotPasswordView(APIView):
             return APIResponse.error(message="User not found", status_code=status.HTTP_404_NOT_FOUND)
         code = generate_otp()
         expires = otp_expiry()
-        VerificationCode.objects.create( user=user, code=code, expires_at=expires, purpose="reset")
+        OTP.objects.create( user=user, code=code, expires_at=expires, purpose="reset")
         if user.email:
             send_reset_password_email(user.email,code)   
         return APIResponse.success(
@@ -147,11 +146,10 @@ class ForgotPasswordView(APIView):
         )
         
         
-# This view Verified the resset code and returns a Secret key which is used to reset the pasword 
 class VerifyResetCodeView(APIView):
     def post(self, request):
         user = get_object_or_404(User, id=request.data.get("user_id"))
-        record = VerificationCode.objects.filter(user=user,code=request.data.get("code"),purpose="reset",expires_at__gte=timezone.now()).first()
+        record = OTP.objects.filter(user=user,code=request.data.get("code"),purpose="reset",expires_at__gte=timezone.now()).first()
         if not record:
             return APIResponse.error(message="Invalid code", status_code=status.HTTP_400_BAD_REQUEST)
         secret_key = str(uuid.uuid4())
@@ -172,7 +170,7 @@ class ResetPasswordView(APIView):
         if new_password != confirm_password:
             return APIResponse.error(message="Passwords do not match", status_code=status.HTTP_400_BAD_REQUEST)
         
-        record = VerificationCode.objects.filter(user=user,code=request.data.get("secret_key"),purpose="reset").first()
+        record = OTP.objects.filter(user=user,code=request.data.get("secret_key"),purpose="reset").first()
         if not record:
             return APIResponse.error(message="Invalid request", status_code=status.HTTP_400_BAD_REQUEST)
         # Update and save

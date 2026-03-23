@@ -1,8 +1,8 @@
 from time import timezone
 
 from rest_framework import serializers
-from apps.instructors.models import InstructorProfile
-from apps.organizations.models import MemberInvitation, Team
+from apps.instructors.models import Instructor
+from apps.organizations.models import Invitation, Membership
 from apps.users.models import User
 
 class InstructorRegisterSerializer(serializers.ModelSerializer):
@@ -44,7 +44,7 @@ class InstructorRegisterSerializer(serializers.ModelSerializer):
             is_terms_service=validated_data["is_terms_service"],
             role="instructor"
         )
-        InstructorProfile.objects.create(user=user)
+        Instructor.objects.create(user=user)
         
         
        

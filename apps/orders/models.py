@@ -125,7 +125,7 @@ class Wishlist(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.user.username}'s Wishlist"
+        return f"{self.user.name}'s Wishlist"
 
     def get_total_items(self):
         return self.items.count()
@@ -145,4 +145,4 @@ class WishlistItem(models.Model):
         ordering = ['-added_at']
 
     def __str__(self):
-        return f"{self.wishlist.user.username} → {self.course.title}"
+        return f"{self.wishlist.user.name} → {self.course.title}"
