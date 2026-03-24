@@ -2,16 +2,19 @@ from datetime import timedelta, timezone
 import uuid
 from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework import status
 from apps.organizations.models import Invitation, Organization, User
 from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
 from apps.students.serializers import LearnerRegisterSerializer
 from apps.affiliates.serializers import AffiliateRegisterSerializer
+from apps.users.serializers import UserDetailSerializer, UserListSerializer
 from utils.api_response import APIResponse
 from .models import OTP
 from utils.emails import *
+from django.db.models import Q
+from utils.paginations import CustomPagination
 
 
 
@@ -197,3 +200,59 @@ class CustomTokenRefreshView(APIView):
             )
         except Exception as e:
             return APIResponse.error(message=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+class UserListView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+    
+    def get(self, request):
+        search = request.query_params.get("search", "").strip()
+        role = request.query_params.get("role")
+        is_active = request.query_params.get("is_active")
+
+        users = User.objects.all().exclude(is_staff=True)
+
+        #search (name + email)
+        if search:
+            users = users.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        # role filter
+        if role:
+            users = users.filter(role=role)
+
+        # active filter
+        if is_active is not None:
+            if is_active.lower() == "true":
+                users = users.filter(is_active=True)
+            elif is_active.lower() == "false":
+                users = users.filter(is_active=False)
+
+        users = users.order_by("-created_at")
+
+        paginator = self.pagination_class()
+        paginated_users = paginator.paginate_queryset(users, request, view=self)
+        serializer = UserListSerializer(paginated_users, many=True)
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="User list retrieved successfully."
+        )
+        
+        
+        
+class UserDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserDetailSerializer(user)
+        return APIResponse.success(
+            message="User details retrieved successfully.",
+            data=serializer.data,
+            status_code=200
+        )
