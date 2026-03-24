@@ -26,16 +26,18 @@ urlpatterns = [
     
     # API Endpoints
     path('api/', include([
-        path('api/v1/core/', include('apps.core.urls')),
-        path('api/v1/users/', include('apps.users.urls')),
-        path('api/v1/courses/', include('apps.courses.urls')),
-        path('api/v1/affiliates/', include('apps.affiliates.urls')),
-        path('api/v1/analytics/', include('apps.analytics.urls')),
-        path('api/v1/payments/', include('apps.payments.urls')),
-        path('api/v1/notifications/', include('apps.notifications.urls')),
-        path('api/v1/enrollments/', include('apps.enrollments.urls')),
-        path('api/v1/orders/', include('apps.orders.urls')),
-        path('api/v1/messaging/', include('apps.messaging.urls')),
+        path('v1/core/', include('apps.core.urls')),
+        path('v1/users/', include('apps.users.urls')),
+        path('v1/courses/', include('apps.courses.urls')),
+        path('v1/affiliates/', include('apps.affiliates.urls')),
+        path('v1/analytics/', include('apps.analytics.urls')),
+        path('v1/payments/', include('apps.payments.urls')),
+        path('v1/notifications/', include('apps.notifications.urls')),
+        path('v1/enrollments/', include('apps.enrollments.urls')),
+        path('v1/orders/', include('apps.orders.urls')),
+        path('v1/messaging/', include('apps.messaging.urls')),
+        path('v1/instructors/', include('apps.instructors.urls')),
+        path('v1/organizations/', include('apps.organizations.urls')),
     ]))
 ]
 

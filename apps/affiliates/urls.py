@@ -1,8 +1,8 @@
 from django.urls import path
-from apps.core import views
+from .views import *
 
-
-# Affiliates app URLs
 urlpatterns = [
-    
+    path("affiliates/", AffiliateListView.as_view(), name="affiliate-list"),
+    path("affiliates/status/<str:pk>/", UpdateAffiliateStatusView.as_view(), name="affiliate-status-update"),
+    path("delete-affiliate/<str:pk>/", DeleteAffiliateView.as_view(), name="delete-affiliate"),
 ]

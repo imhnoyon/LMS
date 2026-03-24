@@ -49,7 +49,7 @@ class RegisterAPIView(APIView):
             send_verification_email(user.email, code)
        
         return APIResponse.success(
-            message="Registration completed successfully.",
+            message="Registration completed successfully.OTP sent to your email for verification.",
             data={"id": str(user.id)},
             status_code=status.HTTP_201_CREATED
         )
@@ -116,8 +116,6 @@ class SignInView(APIView):
             message="Login successful",
             data={
                 **tokens,
-                # "access_token": tokens.get("access"),
-                # "refresh_token": tokens.get("refresh"),
                  "role": user.role,
                 "user_id": str(user.id),
                
