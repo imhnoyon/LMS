@@ -9,13 +9,13 @@ from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
 from apps.students.serializers import LearnerRegisterSerializer
 from apps.affiliates.serializers import AffiliateRegisterSerializer
-from apps.users.serializers import UserDetailSerializer, UserListSerializer
+from apps.users.serializers import *
 from utils.api_response import APIResponse
 from .models import OTP
 from utils.emails import *
 from django.db.models import Q
 from utils.paginations import CustomPagination
-
+from django.core.mail import EmailMultiAlternatives 
 
 
 # Create your views here.
@@ -105,6 +105,7 @@ class VerifyEmailView(APIView):
      
         
 # Signin view for all user role 
+from django.contrib.auth.models import update_last_login
 class SignInView(APIView):
     def post(self, request):
         password = request.data.get("password")
@@ -113,6 +114,8 @@ class SignInView(APIView):
         if not user or not user.check_password(password):
             return APIResponse.error(message="Invalid credentials", status_code=status.HTTP_400_BAD_REQUEST)
 
+        # last_login update
+        update_last_login(None, user)
         tokens = generate_tokens(user)
 
         return APIResponse.success(
@@ -243,11 +246,9 @@ class UserListView(APIView):
             message="User list retrieved successfully."
         )
         
-        
-        
+# User detail view for admin panel with last active time       
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
-
     def get(self, request, pk):
         user = get_object_or_404(User, pk=pk)
         serializer = UserDetailSerializer(user)
@@ -256,3 +257,58 @@ class UserDetailView(APIView):
             data=serializer.data,
             status_code=200
         )
+        
+        
+ # View for sending emails from admin panel to users      
+class SendEmailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        serializer = SendEmailSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        to_email = serializer.validated_data["to_email"]
+        subject = serializer.validated_data["subject"]
+        message = serializer.validated_data["message"]
+        user=User.objects.filter(email=to_email).first()
+        try:
+            context = {
+                "subject": subject,
+                "message": message,
+                "app_name": "Learn Hub",
+                "recipient_name": user.name if user else "User",
+                "button_url": None,
+                "button_text": None,
+            }
+
+            html_content = render_to_string("emails/send_email.html", context)
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[to_email],
+            )
+            email.attach_alternative(html_content, "text/html")
+            email.send()
+
+            return APIResponse.success(
+                message="Email sent successfully",
+                data={
+                    "to_email": to_email,
+                    "subject": subject,
+                    "message": message,
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return APIResponse.error(
+                message=f"Email sending failed: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

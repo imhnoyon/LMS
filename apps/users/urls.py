@@ -17,4 +17,5 @@ urlpatterns = [
     # All User list shown in admin panel with course count
     path('users/', UserListView.as_view(), name='user-list'),
     path('users/<uuid:pk>/', UserDetailView.as_view(), name='user-detail'),
+     path("send-email/", SendEmailView.as_view(), name="send-email"),
 ]
