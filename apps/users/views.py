@@ -271,7 +271,6 @@ class SendEmailView(APIView):
                 errors=serializer.errors,
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-
         to_email = serializer.validated_data["to_email"]
         subject = serializer.validated_data["subject"]
         message = serializer.validated_data["message"]
@@ -285,9 +284,7 @@ class SendEmailView(APIView):
                 "button_url": None,
                 "button_text": None,
             }
-
             html_content = render_to_string("emails/send_email.html", context)
-
             email = EmailMultiAlternatives(
                 subject=subject,
                 body=message,
@@ -312,3 +309,84 @@ class SendEmailView(APIView):
                 message=f"Email sending failed: {str(e)}",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+# View to block or unblock users from admin panel          
+class BlockUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+
+        if request.user == user:
+            return APIResponse.error(
+                message="You cannot block or unblock yourself.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if  user.is_active:
+            user.is_active = False
+            user.is_verified = False
+            user.save(update_fields=["is_active", "is_verified"])
+
+            return APIResponse.success(
+                message="User blocked successfully.",
+                data={
+                    "user_id": str(user.id),
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "status": "blocked"
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.success(
+            message="User is already blocked.",
+            data={
+                "user_id": str(user.id),
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "status": "already blocked"
+            },
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class UnblockUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+
+        if request.user == user:
+            return APIResponse.error(
+                message="You cannot unblock yourself.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.is_active:
+            user.is_active = True
+            user.is_verified = True
+            user.save(update_fields=["is_active","is_verified"])
+
+            return APIResponse.success(
+                message="User unblocked successfully.",
+                data={
+                    "user_id": str(user.id),
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "status": "unblocked"
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.success(
+            message="User is already active.",
+            data={
+                "user_id": str(user.id),
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "status": "already active"
+            },
+            status_code=status.HTTP_200_OK
+        )
