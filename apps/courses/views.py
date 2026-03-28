@@ -341,6 +341,9 @@ class CourseListView(APIView):
 
         return paginator.get_paginated_response(serializer.data)
     
+    
+    
+class courseDetail(APIView):
     def get(self,request,pk):
         course = Course.objects.get(pk=pk)
         serializer = CourseDetailSerializer(course,context={"request": request})
@@ -360,7 +363,6 @@ class CourseListView(APIView):
             message="Course status updated successfully",
             data={"status": course.status}
         )
-    
     
     
     

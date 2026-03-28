@@ -5,7 +5,7 @@ urlpatterns = [
     # Admin can create categories (for now, we can create them via admin panel)
     path('categories/', views.CategoryAPIView.as_view()),
     path('courses-list/', views.CourseListView.as_view(), name='course-list'),
-    path('courses-list/<int:pk>/', views.CourseListView.as_view(), name='course-list'),
+    path('courses-list/<int:pk>/', views.courseDetail.as_view(), name='course-list'),
     
     
     # Basic info
