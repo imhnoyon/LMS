@@ -30,7 +30,8 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
-
+        extra_fields.setdefault("is_verified", True)
+        
         if extra_fields.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
 
@@ -61,7 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     email = models.EmailField(unique=True)
-    name = models.CharField(max_length=150)
+    name = models.CharField(max_length=150,blank=True)
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default="student", db_index=True)
 
     phone = models.CharField(max_length=20, blank=True)
@@ -141,6 +142,7 @@ class OTP(models.Model):
         if not self.expires_at:
             self.expires_at = timezone.now() + timezone.timedelta(minutes=5)
         super().save(*args, **kwargs)
-
+    
+    
     def __str__(self):
         return f"{self.user.email} - {self.code}"

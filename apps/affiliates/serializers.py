@@ -7,61 +7,103 @@ from apps.users.models import User
 
 class AffiliateRegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
-    company_name = serializers.CharField(source="Affiliate.company_name", required=True)
-    affiliate_type = serializers.ChoiceField(choices=Affiliate.AFFILIATE_TYPE_CHOICES, required=True)
-    account_number = serializers.CharField(source="Affiliate.account_number", required=True)
-    tax_id = serializers.CharField(source="Affiliate.tax_id", required=True)
-    address = serializers.CharField(source="Affiliate.address", required=True)
-    
+
+    affiliate_type = serializers.ChoiceField(choices=Affiliate.AFFILIATE_TYPE_CHOICES,required=True)
+    iban = serializers.CharField(required=True, allow_blank=True)
+    tax_id = serializers.CharField(required=True, allow_blank=True)
+    address = serializers.CharField(required=True, allow_blank=True)
+
     class Meta:
-        model=User
-        fields=["full_name","email","password","confirm_password","company_name","affiliate_type","account_number","tax_id","address","is_terms_service",]
-        extra_kwargs = {    
+        model = User
+        fields = [
+            "name",
+            "email",
+            "password",
+            "confirm_password",
+            "affiliate_type",
+            "iban",
+            "tax_id",
+            "address",
+            "accepted_terms",
+        ]
+        extra_kwargs = {
             "password": {"write_only": True, "min_length": 8}
         }
-        
-    def validate_full_name(self, value):
-        if User.objects.filter(full_name=value).exists():
-            raise serializers.ValidationError("Full name already exists.")
+
+    def validate_name(self, value):
+        if User.objects.filter(name=value).exists():
+            raise serializers.ValidationError("Name already exists.")
         return value
+
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email already exists.")
         return value
+
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({
                 "confirm_password": "Passwords do not match."
             })
-        if not attrs.get("is_terms_service", False):
+
+        if not attrs.get("accepted_terms", False):
             raise serializers.ValidationError({
-                "is_terms_service": "You must accept the terms and conditions."
+                "accepted_terms": "You must accept the terms and conditions."
             })
+
         return attrs
-    
+
     @transaction.atomic
     def create(self, validated_data):
         validated_data.pop("confirm_password")
-        affiliate_data = validated_data.pop("Affiliate")
-        company_name = affiliate_data["company_name"]
-        affiliate_type = affiliate_data["affiliate_type"]
-        account_number = affiliate_data["account_number"]
-        tax_id = affiliate_data["tax_id"]
-        address = affiliate_data["address"]
+
+        affiliate_type = validated_data.pop("affiliate_type")
+        iban = validated_data.pop("iban", "")
+        tax_id = validated_data.pop("tax_id", "")
+        address = validated_data.pop("address", "")
 
         user = User.objects.create_user(
-            full_name=validated_data["full_name"],
+            name=validated_data["name"],
             email=validated_data["email"],
             password=validated_data["password"],
-            is_terms_service=validated_data["is_terms_service"],
+            accepted_terms=validated_data["accepted_terms"],
             role="affiliate"
         )
+
         Affiliate.objects.create(
             user=user,
-            company_name=company_name,
             affiliate_type=affiliate_type,
-            account_number=account_number,
+            iban=iban,
             tax_id=tax_id,
             address=address
         )
+
         return user
+
+
+
+# Serializer for listing affiliates with user details
+class AffiliateListSerializer(serializers.ModelSerializer):
+    user_id = serializers.UUIDField(source="user.id", read_only=True)
+    name = serializers.SerializerMethodField()
+    email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = Affiliate
+        fields = ["id","user_id","name","email","affiliate_type", "iban","tax_id","address","commission_rate","total_earned","total_paid","total_payable","status","created_at","updated_at",]
+
+    def get_name(self, obj):
+        return obj.user.name or obj.user.email
+    
+
+# Serializer for updating affiliate status
+class AffiliateStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Affiliate
+        fields = ["status"]
+
+    def validate_status(self, value):
+        valid_statuses = [choice[0] for choice in Affiliate.STATUS_CHOICES]
+        if value not in valid_statuses:
+            raise serializers.ValidationError("Invalid status selected.")
+        return value

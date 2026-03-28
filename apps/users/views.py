@@ -2,17 +2,20 @@ from datetime import timedelta, timezone
 import uuid
 from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework import status
 from apps.organizations.models import Invitation, Organization, User
 from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
 from apps.students.serializers import LearnerRegisterSerializer
 from apps.affiliates.serializers import AffiliateRegisterSerializer
+from apps.users.serializers import *
 from utils.api_response import APIResponse
 from .models import OTP
 from utils.emails import *
-
+from django.db.models import Q
+from utils.paginations import CustomPagination
+from django.core.mail import EmailMultiAlternatives 
 
 
 # Create your views here.
@@ -49,7 +52,7 @@ class RegisterAPIView(APIView):
             send_verification_email(user.email, code)
        
         return APIResponse.success(
-            message="Registration completed successfully.",
+            message="Registration completed successfully.OTP sent to your email for verification.",
             data={"id": str(user.id)},
             status_code=status.HTTP_201_CREATED
         )
@@ -102,6 +105,7 @@ class VerifyEmailView(APIView):
      
         
 # Signin view for all user role 
+from django.contrib.auth.models import update_last_login
 class SignInView(APIView):
     def post(self, request):
         password = request.data.get("password")
@@ -110,14 +114,14 @@ class SignInView(APIView):
         if not user or not user.check_password(password):
             return APIResponse.error(message="Invalid credentials", status_code=status.HTTP_400_BAD_REQUEST)
 
+        # last_login update
+        update_last_login(None, user)
         tokens = generate_tokens(user)
 
         return APIResponse.success(
             message="Login successful",
             data={
                 **tokens,
-                # "access_token": tokens.get("access"),
-                # "refresh_token": tokens.get("refresh"),
                  "role": user.role,
                 "user_id": str(user.id),
                
@@ -199,3 +203,190 @@ class CustomTokenRefreshView(APIView):
             )
         except Exception as e:
             return APIResponse.error(message=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+class UserListView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+    
+    def get(self, request):
+        search = request.query_params.get("search", "").strip()
+        role = request.query_params.get("role")
+        is_active = request.query_params.get("is_active")
+
+        users = User.objects.all().exclude(is_staff=True)
+
+        #search (name + email)
+        if search:
+            users = users.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        # role filter
+        if role:
+            users = users.filter(role=role)
+
+        # active filter
+        if is_active is not None:
+            if is_active.lower() == "true":
+                users = users.filter(is_active=True)
+            elif is_active.lower() == "false":
+                users = users.filter(is_active=False)
+
+        users = users.order_by("-created_at")
+
+        paginator = self.pagination_class()
+        paginated_users = paginator.paginate_queryset(users, request, view=self)
+        serializer = UserListSerializer(paginated_users, many=True)
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="User list retrieved successfully."
+        )
+        
+# User detail view for admin panel with last active time       
+class UserDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    def get(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserDetailSerializer(user)
+        return APIResponse.success(
+            message="User details retrieved successfully.",
+            data=serializer.data,
+            status_code=200
+        )
+        
+        
+ # View for sending emails from admin panel to users      
+class SendEmailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        serializer = SendEmailSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        to_email = serializer.validated_data["to_email"]
+        subject = serializer.validated_data["subject"]
+        message = serializer.validated_data["message"]
+        user=User.objects.filter(email=to_email).first()
+        try:
+            context = {
+                "subject": subject,
+                "message": message,
+                "app_name": "Learn Hub",
+                "recipient_name": user.name if user else "User",
+                "button_url": None,
+                "button_text": None,
+            }
+            html_content = render_to_string("emails/send_email.html", context)
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[to_email],
+            )
+            email.attach_alternative(html_content, "text/html")
+            email.send()
+
+            return APIResponse.success(
+                message="Email sent successfully",
+                data={
+                    "to_email": to_email,
+                    "subject": subject,
+                    "message": message,
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return APIResponse.error(
+                message=f"Email sending failed: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+# View to block or unblock users from admin panel          
+class BlockUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+
+        if request.user == user:
+            return APIResponse.error(
+                message="You cannot block or unblock yourself.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if  user.is_active:
+            user.is_active = False
+            user.is_verified = False
+            user.save(update_fields=["is_active", "is_verified"])
+
+            return APIResponse.success(
+                message="User blocked successfully.",
+                data={
+                    "user_id": str(user.id),
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "status": "blocked"
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.success(
+            message="User is already blocked.",
+            data={
+                "user_id": str(user.id),
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "status": "already blocked"
+            },
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+class UnblockUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+
+        if request.user == user:
+            return APIResponse.error(
+                message="You cannot unblock yourself.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.is_active:
+            user.is_active = True
+            user.is_verified = True
+            user.save(update_fields=["is_active","is_verified"])
+
+            return APIResponse.success(
+                message="User unblocked successfully.",
+                data={
+                    "user_id": str(user.id),
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "status": "unblocked"
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.success(
+            message="User is already active.",
+            data={
+                "user_id": str(user.id),
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "status": "already active"
+            },
+            status_code=status.HTTP_200_OK
+        )

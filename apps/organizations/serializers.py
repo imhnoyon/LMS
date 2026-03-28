@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from apps.users.models import User
-from apps.organizations.models import Organization
+from apps.organizations.models import Membership, Organization
 
 class OrganizationRegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
@@ -9,13 +9,13 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["full_name","email","password","confirm_password","organization_name","is_terms_service",]
+        fields = ["name","email","password","confirm_password","organization_name","accepted_terms",]
         extra_kwargs = {
             "password": {"write_only": True, "min_length": 8}
-        }
-    def validate_full_name(self, value):
-        if User.objects.filter(full_name=value).exists():
-            raise serializers.ValidationError("Full name already exists.")
+        }                             
+    def validate_name(self, value):
+        if User.objects.filter(name=value).exists():
+            raise serializers.ValidationError("Name already exists.")
         return value
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -26,9 +26,9 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "confirm_password": "Passwords do not match."
             })
-        if not attrs.get("is_terms_service", False):
+        if not attrs.get("accepted_terms", False):
             raise serializers.ValidationError({
-                "is_terms_service": "You must accept the terms and conditions."
+                "accepted_terms": "You must accept the terms and conditions."
             })
         return attrs
     
@@ -39,14 +39,43 @@ class OrganizationRegisterSerializer(serializers.ModelSerializer):
         organization_name = organization_data["name"]
 
         user = User.objects.create_user(
-            full_name=validated_data["full_name"],
+            name=validated_data["name"],
             email=validated_data["email"],
             password=validated_data["password"],
-            is_terms_service=validated_data["is_terms_service"],
-            role="organization"
+            accepted_terms=validated_data["accepted_terms"],
+            role="owner",
+          
         )
-        Organization.objects.create(
-            owner=user,   
+        organization=Organization.objects.create(  
             name=organization_name,
         )
+        Membership.objects.create(
+            organization=organization,
+            user=user,
+            role=Membership.Role.ADMIN,
+            status=Membership.Status.ACTIVE
+        )
         return user
+    
+    
+    
+# Organization unverified list serializer
+class UnverifiedOrganizationListSerializer(serializers.ModelSerializer):
+    owner_name = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = ["id","name","bio","photo","banner","phone","email","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at",]
+
+    def get_owner_name(self, obj):
+        owner_membership = obj.owner
+        if owner_membership and owner_membership.user:
+            return owner_membership.user.name
+        return None
+
+    def get_owner_email(self, obj):
+        owner_membership = obj.owner
+        if owner_membership and owner_membership.user:
+            return owner_membership.user.email
+        return None

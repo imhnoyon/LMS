@@ -1,14 +1,5 @@
 from django.urls import path
-from apps.users.views import (
-    RegisterAPIView,
-    VerifyEmailView,
-    SignInView,
-    ResendVerificationCodeView,
-    ForgotPasswordView,
-    VerifyResetCodeView,
-    ResetPasswordView,
-    CustomTokenRefreshView
-)
+from apps.users.views import *
 
 
 # Users app URLs
@@ -21,4 +12,12 @@ urlpatterns = [
     path('verify-reset-code/', VerifyResetCodeView.as_view(), name='verify-reset-code'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('refresh-token/', CustomTokenRefreshView.as_view(), name='refresh-token'),
+    
+    
+    # All User list shown in admin panel with course count
+    path('users/', UserListView.as_view(), name='user-list'),
+    path('users/<uuid:pk>/', UserDetailView.as_view(), name='user-detail'),
+    path("send-email/", SendEmailView.as_view(), name="send-email"),
+    path("block/<uuid:pk>/", BlockUserView.as_view(), name="block-unblock-user"),
+    path("unblock/<uuid:pk>/", UnblockUserView.as_view(), name="unblock-user"),
 ]

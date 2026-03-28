@@ -1,9 +1,13 @@
+from rest_framework import status
+
 from apps.courses.models import Course
 from django.conf import settings
 from django.db import models
 import string
 import random
 import uuid
+
+from utils.api_response import APIResponse
 
 
 # Create your models here.
@@ -50,7 +54,7 @@ class Affiliate(models.Model):
         default="affiliate",
     )
 
-    iban = models.CharField(max_length=34)
+    iban = models.CharField(max_length=34, blank=True,null=True)
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
 
@@ -89,3 +93,5 @@ class AffiliateCommission(models.Model):
         
     def __str__(self):
         return f"{self.affiliate.user.email} - {self.commission_rate}"
+    
+ 
