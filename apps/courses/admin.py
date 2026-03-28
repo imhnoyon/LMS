@@ -45,36 +45,36 @@ class SectionAdmin(admin.ModelAdmin):
     
 @admin.register(Lecture)
 class LectureAdmin(admin.ModelAdmin):
-    list_display = ('section', 'name', 'order','description','notes_text')
+    list_display = ('section', 'name', 'order','description','video_file','LectureAttachment','LectureNoteFile')
     list_filter = ('section',)
     search_fields = ('name',)
 
-@admin.register(LectureVideo)
-class LectureVideoAdmin(admin.ModelAdmin):
-    list_display = ('lecture','video_file','duration')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
+# @admin.register(LectureVideo)
+# class LectureVideoAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','video_file','duration')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
-@admin.register(LectureAttachment)
-class LectureAttachmentAdmin(admin.ModelAdmin):
-    list_display = ('lecture','file','name')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
-    
-    
-@admin.register(LectureCaption)
-class LectureCaptionAdmin(admin.ModelAdmin):
-    list_display = ('lecture','language','file')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
+# @admin.register(LectureAttachment)
+# class LectureAttachmentAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','file','name')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
     
+# @admin.register(LectureCaption)
+# class LectureCaptionAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','language','file')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
-@admin.register(LectureNoteFile)
-class LectureNoteFileAdmin(admin.ModelAdmin):
-    list_display = ('lecture','file','name')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
+    
+    
+# @admin.register(LectureNoteFile)
+# class LectureNoteFileAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','file','name')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
     
     

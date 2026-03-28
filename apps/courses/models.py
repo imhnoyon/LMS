@@ -33,6 +33,8 @@ class Course(models.Model):
         ('draft',     'Draft'),
         ('published', 'Published'),
         ('archived',  'Archived'),
+        ('blocked',  'Blocked'),
+        ('featured',  'Featured'),
     ]
     EXPIRY_CHOICES = [
         ('limited',  'Limited Time'),
@@ -54,6 +56,11 @@ class Course(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
+    def rating(self):
+        if not self.reviews.exists():
+            return 0
+        return self.reviews.aggregate(models.Avg('rating'))
+    
     def __str__(self):
         return self.title
 
@@ -103,15 +110,17 @@ class Lecture(models.Model):
     name        = models.CharField(max_length=255)
     order       = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
-    notes_text  = models.TextField(blank=True)
-
+    video_file= models.FileField(upload_to='lectures/videos/', null=True, blank=True)
+    LectureAttachment = models.FileField(upload_to='lectures/attachments/', null=True, blank=True)
+    LectureNoteFile= models.FileField(upload_to='lectures/notes/', null=True, blank=True)
+    
     class Meta:
         ordering = ['order']
 
     def __str__(self):
         return self.name
 
-
+# I don't use this model because all fields are used in lecture model
 class LectureVideo(models.Model):
     lecture    = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='video')
     video_file = models.FileField(upload_to='lectures/videos/')
@@ -146,8 +155,11 @@ class LectureNoteFile(models.Model):
 
     def __str__(self):
         return f"Note File - {self.lecture.name}"
+# I don't use this model because all fields are used in lecture model ended here
 
 
+
+# Started from quiz here
 class Quiz(models.Model):
     lecture            = models.OneToOneField(Lecture, on_delete=models.CASCADE, null=True, blank=True, related_name='quiz')
     section            = models.ForeignKey(Section, on_delete=models.CASCADE, null=True, blank=True, related_name='quizzes')
