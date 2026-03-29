@@ -32,3 +32,15 @@ class IsInstructorOrOrganization(BasePermission):
             and user.is_authenticated
             and user.role in ["instructor", "organization"]
         )
+        
+        
+class IsStudent(BasePermission):
+    message = "Only instructors or organizations can access this."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            user
+            and user.is_authenticated
+            and user.role in ["student",]
+        )

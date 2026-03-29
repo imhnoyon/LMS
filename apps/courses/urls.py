@@ -20,6 +20,7 @@ urlpatterns = [
     
     # Curriculum
     path('courses/sections/<int:pk>/', views.SectionView.as_view()),
+    
     path('courses/<int:pk>/sections/<int:section_id>/', views.SectionView.as_view()),
     
     path('sections/lectures/<int:section_id>/', views.LectureView.as_view()),

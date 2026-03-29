@@ -214,14 +214,11 @@ class LectureView(APIView):
     def post(self, request, section_id):
         section = get_object_or_404(Section, pk=section_id)
 
-        data = request.data.copy()
+        serializer = LectureSerializer(
+            data=request.data,
+            context={"request": request}
+        )
 
-        data['video_file'] = request.FILES.get('video_file')
-        data['LectureAttachment'] = request.FILES.get('LectureAttachment')
-        data['LectureNoteFile'] = request.FILES.get('LectureNoteFile')
-        
-        serializer = LectureSerializer(data=data, context={"request": request})
-        
         if serializer.is_valid():
             serializer.save(section=section)
             return APIResponse.success(

@@ -42,6 +42,27 @@ def generate_order_id():
     random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"ORD-{date_part}-{random_part}"
 
+class Cart(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_cart')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.user.name
+    
+    
+class CartItems(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True, blank=True, related_name='cart_products')
+    course_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.cart.user.name} - {self.course.title}"
 
 class Order(models.Model):
     STATUS_CHOICES = (
