@@ -35,6 +35,8 @@ class Course(models.Model):
         ('archived',  'Archived'),
         ('blocked',  'Blocked'),
         ('featured',  'Featured'),
+        ('accepted',  'Accepted'),
+        ('rejected',  'Rejected'),
     ]
     EXPIRY_CHOICES = [
         ('limited',  'Limited Time'),
@@ -60,6 +62,10 @@ class Course(models.Model):
         if not self.reviews.exists():
             return 0
         return self.reviews.aggregate(models.Avg('rating'))
+    def Category(self):
+        if not self.category:
+            return None
+        return self.category.name
     
     def __str__(self):
         return self.title

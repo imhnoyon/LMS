@@ -1,11 +1,14 @@
 from rest_framework import serializers
 from .models import *
+from apps.instructors.models import Instructor
 import json
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ['id', 'name', 'slug', 'description', 'created_at', 'updated_at']
+
 
 class CourseBasicSerializer(serializers.ModelSerializer):
     class Meta:
@@ -161,16 +164,22 @@ class SectionDetailSerializer(serializers.ModelSerializer):
         model = Section
         fields = ['id', 'name', 'order', 'lectures', ]
         
+class InstructorDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'phone', 'get_biography','avatar']
+        
 class CourseDetailSerializer(serializers.ModelSerializer):
     advance_info = CourseAdvanceInfoDetailSerializer(read_only=True)
     outcomes = CourseOutcomeDetailSerializer(many=True, read_only=True)
     requirements = CourseRequirementDetailSerializer(many=True, read_only=True)
     sections = SectionDetailSerializer(many=True, read_only=True)
- 
+    instructor = InstructorDetailSerializer(read_only=True)
+    modules=serializers.CharField(source='sections.count', read_only=True)
     
     class Meta:
         model = Course
-        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price','rating', 'discount_price', 'coupon_code', 'expiry_type', 'status','advance_info', 'outcomes','requirements','sections'] 
+        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','instructor','advance_info', 'outcomes','requirements','sections'] 
         
 # Course details serializers ended here
         

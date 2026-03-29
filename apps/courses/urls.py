@@ -8,6 +8,10 @@ urlpatterns = [
     path('courses-list/<int:pk>/', views.courseDetail.as_view(), name='course-list'),
     
     
+    # Instructor Deshboard
+    path('courses-list-instructor/',views.CourseListByInstructorView.as_view(), name='course-list-instructor'),
+    
+    
     # Basic info
     path('courses/', views.CourseCreateView.as_view()),
     path('courses/<int:pk>/', views.CourseCreateView.as_view()),

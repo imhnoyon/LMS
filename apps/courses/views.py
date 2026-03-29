@@ -17,7 +17,16 @@ class CategoryAPIView(APIView):
     pagination_class = CustomPagination
 
     def get(self, request):
+        search = request.query_params.get('search')
+        
         categories = Category.objects.all().order_by('-created_at')
+        if search:
+            categories = categories.filter(
+                Q(name__icontains=search) |
+                Q(slug__icontains=search)
+            )
+
+            
         paginator = self.pagination_class()
         paginated_categories = paginator.paginate_queryset(categories, request, view=self)
         serializer = CategorySerializer(paginated_categories,many=True,context={"request": request})
@@ -325,8 +334,44 @@ class CourseListView(APIView):
             )
 
         if category:
-            courses = courses.filter(category_id=category)
+            courses = courses.filter(category__name__iexact=category)
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
 
+        paginator = self.paginator_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+
+        serializer = CourseDetailSerializer(
+            paginated_courses,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)
+    
+# Course list Seen by Instructor
+class CourseListByInstructorView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        status_param = request.query_params.get('status')
+
+        courses = Course.objects.filter(instructor=request.user).order_by('-id')
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search) |
+                Q(language__icontains=search) |
+                Q(level__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category__name__iexact=category)
         if status_param:
             courses = courses.filter(status__iexact=status_param)
 
@@ -357,7 +402,11 @@ class courseDetail(APIView):
                 message="Status is required",
                 status_code=400
             )
-        course.status = status_value
+            
+        if status_value == "accepted":
+            course.status = "Accepted"
+        elif status_value == "rejected":
+            course.status = "Rejected"
         course.save()
         return APIResponse.success(
             message="Course status updated successfully",
