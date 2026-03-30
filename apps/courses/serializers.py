@@ -143,12 +143,12 @@ class CourseAdvanceInfoDetailSerializer(serializers.ModelSerializer):
         model = CourseAdvanceInfo
         fields = ['id', 'thumbnail', 'trailer_video', 'description']
         
-class CourseOutcomeDetailSerializer(serializers.ModelSerializer):
+class CourseOutCome(serializers.ModelSerializer):
     class Meta:
         model = CourseOutcome
         fields = ['id', 'text', 'order']
 
-class CourseRequirementDetailSerializer(serializers.ModelSerializer):
+class CourseRequirement(serializers.ModelSerializer):
     class Meta:
         model = CourseRequirement
         fields = ['id', 'text', 'order']
@@ -171,8 +171,8 @@ class InstructorDetailSerializer(serializers.ModelSerializer):
         
 class CourseDetailSerializer(serializers.ModelSerializer):
     advance_info = CourseAdvanceInfoDetailSerializer(read_only=True)
-    outcomes = CourseOutcomeDetailSerializer(many=True, read_only=True)
-    requirements = CourseRequirementDetailSerializer(many=True, read_only=True)
+    outcomes = CourseOutCome(many=True, read_only=True)
+    requirements = CourseRequirement(many=True, read_only=True)
     sections = SectionDetailSerializer(many=True, read_only=True)
     instructor = InstructorDetailSerializer(read_only=True)
     modules=serializers.CharField(source='sections.count', read_only=True)

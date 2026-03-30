@@ -11,7 +11,7 @@ class Enrollment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="enrollments")
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     is_completed = models.BooleanField(default=False) # When student completes the course, we will mark this as True
     enrolled_at = models.DateTimeField(auto_now_add=False)
 

@@ -207,15 +207,15 @@ class CreateOrderFromCartView(APIView):
             )
 
             subtotal += original_price
-            total_discount += item_discount
-            total_amount += paid_price
+            total_amount += item_discount
+            total_discount += paid_price
 
             created_items.append({
                 "course_id": course.id,
                 "course_title": course.title,
                 "original_price": str(original_price),
-                "paid_price": str(paid_price),
-                "discount_amount": str(item_discount),
+                "paid_price": str(item_discount),
+                "discount_amount": str(total_amount),
                 "course_coupon_code": course.coupon_code or ""
             })
 
@@ -248,8 +248,8 @@ class CreateOrderFromCartView(APIView):
                 "status": order.status,
                 "coupon_code": order.coupon_code,
                 "subtotal": str(order.subtotal),
-                "discount_amount": str(order.discount_amount),
-                "total_amount": str(order.total_amount),
+                "discount_amount": str(order.total_amount),
+                "total_amount": str(order.discount_amount),
                 "items": created_items
             },
             status_code=status.HTTP_201_CREATED
