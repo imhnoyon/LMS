@@ -178,12 +178,19 @@ class CreateOrderFromCartView(APIView):
             paid_price = course.price
 
             # coupon match
-            if (coupon_code and course.coupon_code and course.coupon_code.lower() == coupon_code.lower() and course.is_coupon_valid()):
+            if (
+                coupon_code
+                and course.coupon_code
+                and course.coupon_code.lower() == coupon_code.lower()
+                and course.is_coupon_valid()
+            ):
                 matched_coupon = True
+
                 if course.discount_price is not None and course.discount_price < course.price:
                     paid_price = course.discount_price
                 else:
                     paid_price = course.price
+
             # default course discount
             elif course.discount_price is not None and course.discount_price < course.price:
                 paid_price = course.discount_price
@@ -207,15 +214,15 @@ class CreateOrderFromCartView(APIView):
             )
 
             subtotal += original_price
-            total_amount += item_discount
             total_discount += paid_price
+            total_amount += item_discount
 
             created_items.append({
                 "course_id": course.id,
                 "course_title": course.title,
                 "original_price": str(original_price),
                 "paid_price": str(item_discount),
-                "discount_amount": str(total_amount),
+                "discount_amount": str(paid_price),
                 "course_coupon_code": course.coupon_code or ""
             })
 
@@ -234,8 +241,8 @@ class CreateOrderFromCartView(APIView):
             )
 
         order.subtotal = subtotal
-        order.discount_amount = total_discount
-        order.total_amount = total_amount
+        order.discount_amount = total_amount
+        order.total_amount = total_discount
         order.save(update_fields=["subtotal", "discount_amount", "total_amount", "coupon_code"])
 
         cart.cart_items.all().delete()
