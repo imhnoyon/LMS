@@ -21,7 +21,7 @@ class CartItemsAdmin(admin.ModelAdmin):
     
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("order_id","user","status","coupon","subtotal","total_amount","discount_amount","created_at")
+    list_display = ("order_id","user","status","subtotal","total_amount","discount_amount","created_at")
     search_fields = ("order_id","user__full_name")
     list_filter = ("status",)
  
