@@ -1,7 +1,7 @@
 from symtable import Class
 
 from django.contrib import admin
-from .models import Category, Course,CourseAdvanceInfo,CourseOutcome,CourseRequirement,Section,Lecture,LectureVideo,LectureAttachment,LectureCaption,LectureNoteFile,Quiz,Question,QuestionOption,TrueFalseAnswer,Comment,Review,LiveClass,LiveClassAttendance
+from .models import *
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -76,7 +76,11 @@ class LectureAdmin(admin.ModelAdmin):
 #     list_filter =('lecture',)
 #     search_fields = ('lecture__name',)
     
-    
+@admin.register(QuizAttempt)
+class QuizAttemptAdmin(admin.ModelAdmin):
+    list_display = ('quiz','user','score_percentage','submitted_at','correct_answers','total_questions')
+    list_filter = ('quiz','user')
+    search_fields = ('user__full_name',)
     
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
@@ -130,3 +134,12 @@ class LiveClassAdmin(admin.ModelAdmin):
 class LiveClassAttendanceAdmin(admin.ModelAdmin):
     list_display = ('live_class', 'student','status', 'joined_at','left_at')
     list_filter = ('live_class', 'student')
+    
+    
+    
+    
+@admin.register(LecturesProgress)
+class LectureProgressAdmin(admin.ModelAdmin):
+    list_display = ('course', 'user', 'lecture', 'is_completed')
+    list_filter = ('course', 'user')
+    search_fields = ('user__full_name',)

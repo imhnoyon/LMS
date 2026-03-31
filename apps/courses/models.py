@@ -80,12 +80,19 @@ class Course(models.Model):
             return None
         return self.category.name
     
-    def progress(self):
-        if not self.sections.exists():
+    def get_progress_percentage(self, user):
+        """Calculates the course progress percentage for a specific user based on lectures."""
+        total_lectures = Lecture.objects.filter(section__course=self).count()
+        if total_lectures == 0:
             return 0
-        total_sections = self.sections.count()
-        completed_sections = self.sections.filter(Is_completed=True).count()
-        return (completed_sections / total_sections) * 100
+        
+        completed_lectures = LecturesProgress.objects.filter(
+            user=user, 
+            course=self,
+            is_completed=True
+        ).count()
+        
+        return round((completed_lectures / total_lectures) * 100)
     
     
     def save(self, *args, **kwargs):
@@ -339,11 +346,30 @@ class LiveClassAttendance(models.Model):
         return f"{self.student} — {self.live_class} ({self.status})"
 
 
-class LectureProgress(models.Model):
+class LecturesProgress(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     user   = models.ForeignKey(User, on_delete=models.CASCADE)
     lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE)
     is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    last_watched_at = models.DateTimeField(auto_now=True)
+    watched_seconds = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ["course", "user", "lecture"]
+
+
+class QuizAttempt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="quiz_attempts")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="quiz_attempts")
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
+    correct_answers = models.PositiveIntegerField(default=0)
+    total_questions = models.PositiveIntegerField(default=0)
+    score_percentage = models.FloatField(default=0)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.quiz.title if self.quiz else 'Quiz'} ({self.score_percentage}%)"
