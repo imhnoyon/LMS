@@ -226,7 +226,42 @@ class DailyRevenueSnapshot(models.Model):
     class Meta:
         unique_together = ('user', 'date')
         ordering = ['date']
+ 
+ 
+
+class Invoice(models.Model):
+    STATUS_CHOICES = [
+        ('paid',    'Paid'),
+        ('pending', 'Pending'),
+        ('failed',  'Failed'),
+    ]    
+    invoice_id      = models.CharField(max_length=20, unique=True, editable=False)
+    user           = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')
+    payment_method = models.CharField(max_length=30, null=True, blank=True)
+    amount         = models.DecimalField(max_digits=10, decimal_places=2)
+    currency       = models.CharField(max_length=3, default='USD')
+    status         = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    invoice_date    = models.DateField()
+    created_at     = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta: 
+        ordering = ['-invoice_date']    
         
+        
+    def name(self):
+        return f"{self.user.name}"
+    
+    def save(self, *args, **kwargs):    
+        if not self.invoice_id:
+            now    = timezone.now() 
+            prefix = f"INV-{now.year}-{now.month:02d}-"
+            count  = Invoice.objects.filter(invoice_id__startswith=prefix).count() + 1
+            self.invoice_id = f"{prefix}{count:03d}"
+        super().save(*args, **kwargs)
+ 
+    def __str__(self):
+        return f"{self.invoice_id} — {self.amount} {self.currency}"
+          
 
 """
 Written by Mahedi Hasan Noyon

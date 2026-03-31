@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Payment,PaymentGateway,Transaction,RevenueDistribution,PaymentMethod,Wallet,Payout,Withdrawal,DailyRevenueSnapshot
+from .models import *
 
 
 
@@ -28,3 +28,10 @@ class TransactionAdmin(admin.ModelAdmin):
 @admin.register(RevenueDistribution)
 class RevenueDistributionAdmin(admin.ModelAdmin):
     list_display = ('platform_pct', 'organization_pct', 'instructor_pct', 'effective_date')
+    
+    
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = ('name','invoice_id','payment_method', 'amount','currency', 'status','invoice_date', 'created_at')
+    list_filter  = ('status', 'created_at')
+    search_fields = ('user__full_name',)

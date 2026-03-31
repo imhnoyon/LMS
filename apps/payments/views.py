@@ -12,8 +12,11 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from apps.enrollments.models import Enrollment
+from apps.payments.models import Invoice
 from django.shortcuts import render
 from django.views import View
+from datetime import date
+
 
 # Initialize Stripe with API key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -109,6 +112,18 @@ class CreateStripeCheckoutSessionView(APIView):
             
 
 
+from datetime import date
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
+import stripe
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class StripeWebhookView(APIView):
     authentication_classes = []
@@ -120,7 +135,7 @@ class StripeWebhookView(APIView):
             return event["error_response"]
 
         event_type = event["type"]
-        session = event["data"]["object"]
+        stripe_object = event["data"]["object"]
 
         event_handlers = {
             "checkout.session.completed": self.handle_checkout_completed,
@@ -133,7 +148,7 @@ class StripeWebhookView(APIView):
 
         handler = event_handlers.get(event_type)
         if handler:
-            handler(session)
+            handler(stripe_object)
 
         return APIResponse.success(
             message="Webhook processed successfully.",
@@ -145,13 +160,11 @@ class StripeWebhookView(APIView):
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
 
         try:
-            event = stripe.Webhook.construct_event(
+            return stripe.Webhook.construct_event(
                 payload=payload,
                 sig_header=sig_header,
                 secret=settings.STRIPE_WEBHOOK_SECRET
             )
-            return event
-
         except ValueError:
             return {
                 "error_response": APIResponse.error(
@@ -159,7 +172,6 @@ class StripeWebhookView(APIView):
                     status_code=400
                 )
             }
-
         except stripe.error.SignatureVerificationError:
             return {
                 "error_response": APIResponse.error(
@@ -177,9 +189,12 @@ class StripeWebhookView(APIView):
         if payment.status == "success":
             return
 
-        self._mark_payment_success(payment, session)
+        payment_method = self._get_payment_method(session)
+
+        self._mark_payment_success(payment, session, payment_method)
         self._mark_order_paid(payment.order)
         self._create_enrollments(payment)
+        self._create_invoice(payment)
 
     @transaction.atomic
     def handle_checkout_expired(self, session):
@@ -192,7 +207,9 @@ class StripeWebhookView(APIView):
             payment.save(update_fields=["status", "updated_at"])
 
     def _get_payment_from_session(self, session):
-        payment_id = session.get("metadata", {}).get("payment_id")
+        metadata = session.metadata.to_dict() if session.metadata else {}
+        payment_id = metadata.get("payment_id")
+
         if not payment_id:
             return None
 
@@ -201,15 +218,42 @@ class StripeWebhookView(APIView):
         except Payment.DoesNotExist:
             return None
 
-    def _mark_payment_success(self, payment, session):
+    def _get_payment_method(self, session):
+        payment_intent_id = getattr(session, "payment_intent", None)
+        if not payment_intent_id:
+            return "stripe"
+
+        try:
+            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+            payment_method_id = payment_intent.get("payment_method")
+
+            if not payment_method_id:
+                return "stripe"
+
+            payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+            method_type = payment_method.type
+
+            if method_type == "card":
+                card_data = getattr(payment_method, "card", None)
+                wallet = getattr(card_data, "wallet", None) if card_data else None
+                if wallet and getattr(wallet, "type", None):
+                    return wallet.type
+
+            return method_type
+        except Exception:
+            return "stripe"
+
+    def _mark_payment_success(self, payment, session, payment_method):
         payment.status = "success"
-        payment.transaction_id = session.get("id")
-        payment.gateway_payment_id = session.get("payment_intent")
+        payment.transaction_id = session.id
+        payment.gateway_payment_id = session.payment_intent
+        payment.payment_method = payment_method
         payment.paid_at = timezone.now()
         payment.save(update_fields=[
             "status",
             "transaction_id",
             "gateway_payment_id",
+            "payment_method",
             "paid_at",
             "updated_at",
         ])
@@ -219,22 +263,39 @@ class StripeWebhookView(APIView):
         order.save(update_fields=["status"])
 
     def _create_enrollments(self, payment):
-        order = payment.order
-        order_items = order.items.select_related("course").all()
+        order_items = payment.order.items.select_related("course").all()
 
         for item in order_items:
             Enrollment.objects.get_or_create(
                 user=payment.user,
                 course=item.course,
                 defaults={
-                    "order": order,
+                    "order": payment.order,
                     "is_active": True,
-                     "is_active": True,
-                     "enrolled_at": timezone.now(),
+                    "enrolled_at": timezone.now(),
                 }
             )
 
-    # Additional webhook event handlers
+    def _create_invoice(self, payment):
+        invoice_exists = Invoice.objects.filter(
+            user=payment.user,
+            amount=payment.amount,
+            invoice_date=date.today(),
+            status="paid"
+        ).exists()
+
+        if invoice_exists:
+            return
+
+        Invoice.objects.create(
+            user=payment.user,
+            payment_method=payment.payment_method or "stripe",
+            amount=payment.amount,
+            currency=payment.currency or "USD",
+            status="paid",
+            invoice_date=date.today(),
+        )
+
     def handle_payment_intent_succeeded(self, payment_intent):
         pass
 
@@ -246,7 +307,6 @@ class StripeWebhookView(APIView):
 
     def handle_charge_updated(self, charge):
         pass
-
 
 class PaymentSuccessView(View):
     """Render payment success page"""

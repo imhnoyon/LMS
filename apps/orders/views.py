@@ -115,6 +115,12 @@ class CartListView(APIView):
 from decimal import Decimal
 from django.db import transaction
 
+from decimal import Decimal
+from django.db import transaction
+from rest_framework.views import APIView
+from rest_framework import status
+
+
 class CreateOrderFromCartView(APIView):
     permission_classes = [IsAuthenticated, IsStudent]
 
@@ -152,18 +158,20 @@ class CreateOrderFromCartView(APIView):
         )
 
         created_items = []
+
         subtotal = Decimal("0.00")
         total_discount = Decimal("0.00")
         total_amount = Decimal("0.00")
+
         matched_coupon = False
-        processed_course_ids = set()
+        processed_courses = set()
 
         for item in cart_items:
             course = item.course
 
-            if course.id in processed_course_ids:
+            if course.id in processed_courses:
                 continue
-            processed_course_ids.add(course.id)
+            processed_courses.add(course.id)
 
             if Enrollment.objects.filter(user=user, course=course).exists():
                 continue
@@ -174,10 +182,17 @@ class CreateOrderFromCartView(APIView):
             if course.status not in ["published", "accepted", "featured"]:
                 continue
 
-            original_price = course.price
-            paid_price = course.price
+            original_price = Decimal(course.price)
 
-            # coupon match
+            # ----------------------------
+            # DEFAULT VALUES
+            # ----------------------------
+            discount_amount = Decimal("0.00")
+            paid_price = original_price
+
+            # ----------------------------
+            # COUPON LOGIC (FIXED)
+            # ----------------------------
             if (
                 coupon_code
                 and course.coupon_code
@@ -186,26 +201,23 @@ class CreateOrderFromCartView(APIView):
             ):
                 matched_coupon = True
 
-                if course.discount_price is not None and course.discount_price < course.price:
-                    paid_price = course.discount_price
-                else:
-                    paid_price = course.price
+                # FIX: treat discount_price as DISCOUNT, NOT final price
+                if course.discount_price is not None:
+                    discount_amount = Decimal(course.discount_price)
 
-            # default course discount
-            elif course.discount_price is not None and course.discount_price < course.price:
-                paid_price = course.discount_price
+                # prevent overflow
+                if discount_amount > original_price:
+                    discount_amount = original_price
 
-            else:
-                paid_price = course.price
+                paid_price = original_price - discount_amount
 
-            # safety check
+            # safety
             if paid_price < Decimal("0.00"):
                 paid_price = Decimal("0.00")
 
-            item_discount = original_price - paid_price
-            if item_discount < Decimal("0.00"):
-                item_discount = Decimal("0.00")
-
+            # ----------------------------
+            # CREATE ORDER ITEM
+            # ----------------------------
             OrderItem.objects.create(
                 order=order,
                 course=course,
@@ -213,16 +225,19 @@ class CreateOrderFromCartView(APIView):
                 paid_price=paid_price
             )
 
+            # ----------------------------
+            # TOTALS (CORRECT)
+            # ----------------------------
             subtotal += original_price
-            total_discount += paid_price
-            total_amount += item_discount
+            total_discount += discount_amount
+            total_amount += paid_price
 
             created_items.append({
                 "course_id": course.id,
                 "course_title": course.title,
                 "original_price": str(original_price),
-                "paid_price": str(item_discount),
-                "discount_amount": str(paid_price),
+                "discount_amount": str(discount_amount),
+                "paid_price": str(paid_price),
                 "course_coupon_code": course.coupon_code or ""
             })
 
@@ -241,8 +256,8 @@ class CreateOrderFromCartView(APIView):
             )
 
         order.subtotal = subtotal
-        order.discount_amount = total_amount
-        order.total_amount = total_discount
+        order.discount_amount = total_discount
+        order.total_amount = total_amount
         order.save(update_fields=["subtotal", "discount_amount", "total_amount", "coupon_code"])
 
         cart.cart_items.all().delete()
@@ -255,8 +270,8 @@ class CreateOrderFromCartView(APIView):
                 "status": order.status,
                 "coupon_code": order.coupon_code,
                 "subtotal": str(order.subtotal),
-                "discount_amount": str(order.total_amount),
-                "total_amount": str(order.discount_amount),
+                "discount_amount": str(order.discount_amount),
+                "total_amount": str(order.total_amount),
                 "items": created_items
             },
             status_code=status.HTTP_201_CREATED
