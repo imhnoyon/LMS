@@ -36,3 +36,46 @@ class LearnerRegisterSerializer(serializers.ModelSerializer):
             role="student"
         )
         return user
+
+
+
+
+# deshboard
+from rest_framework import serializers
+from apps.enrollments.models import Enrollment
+from apps.payments.models import Invoice
+from apps.courses.models import Course
+
+
+
+
+# 🔹 Course Short Serializer (for dashboard)
+class CourseShortSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.ImageField(source="advance_info.thumbnail", read_only=True)
+    
+    class Meta:
+        model = Course
+        fields = ["id", "title",'subtitle', "thumbnail", "price"]
+         
+class InvoiceDashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Invoice
+        fields = [
+            "id",
+            'name',
+            "invoice_id",
+            'payment_method',
+            "amount",
+            "status",
+            "invoice_date",
+            "created_at",
+        ]
+        
+        
+class StudentDashboardSerializer(serializers.Serializer):
+    enrolled_courses_count = serializers.IntegerField()
+    active_courses_count = serializers.IntegerField()
+    completed_courses_count = serializers.IntegerField()
+
+    recently_enrolled = CourseShortSerializer(many=True)
+    recent_invoices = InvoiceDashboardSerializer(many=True)

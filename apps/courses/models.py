@@ -80,6 +80,13 @@ class Course(models.Model):
             return None
         return self.category.name
     
+    def progress(self):
+        if not self.sections.exists():
+            return 0
+        total_sections = self.sections.count()
+        completed_sections = self.sections.filter(Is_completed=True).count()
+        return (completed_sections / total_sections) * 100
+    
     
     def save(self, *args, **kwargs):
         if not self.expiry_date:  
@@ -330,3 +337,13 @@ class LiveClassAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student} — {self.live_class} ({self.status})"
+
+
+class LectureProgress(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    user   = models.ForeignKey(User, on_delete=models.CASCADE)
+    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE)
+    is_completed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ["course", "user", "lecture"]
