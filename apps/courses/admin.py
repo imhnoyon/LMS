@@ -84,9 +84,14 @@ class QuizAttemptAdmin(admin.ModelAdmin):
     
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
-    list_display = ('lecture', 'section', 'title','description','time_limit_minutes','attempts_allowed','passing_score','shuffle_questions')
-    list_filter = ('lecture','section',)
+    list_display = ('get_lecture_name', 'section', 'title','description','time_limit_minutes','attempts_allowed','passing_score','shuffle_questions')
+    list_filter = ('section',)
     search_fields = ('title',)
+    
+    def get_lecture_name(self, obj):
+        if obj.lecture:
+            return f"{obj.lecture.name} (ID: {obj.lecture.id})"
+        return "-"
     
     
     
