@@ -49,7 +49,7 @@ class StudentDashboardView(APIView):
         )
 
 
-# 🔹 Course Player (Udemy Clone)
+# 🔹 Course Player 
 class CoursePlayerView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -106,12 +106,14 @@ class CompleteLectureView(APIView):
 
     def post(self, request, lecture_id):
         lecture = get_object_or_404(Lecture, id=lecture_id)
-        progress, _ = LecturesProgress.objects.get_or_create(user=request.user, lecture=lecture)
+        progress, _ = LecturesProgress.objects.get_or_create(
+            user=request.user, 
+            lecture=lecture,
+            defaults={'course': lecture.section.course}
+        )
         progress.is_completed = True
         progress.completed_at = timezone.now()
         progress.save()
-
-        # Unlock next logic is handled by 'is_lecture_accessible' in subsequent player calls
         return APIResponse.success(message="Lecture marked as completed.")
 
 # 🔹 Quiz taking and submission
@@ -119,8 +121,6 @@ class StudentQuizView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, quiz_id):
         quiz = get_object_or_404(Quiz.objects.prefetch_related("questions__options"), id=quiz_id)
-        # Security: can only take if section lectures are done
-        # (Handling is done in sidebar via is_unlocked)
         return APIResponse.success(data={
             "title": quiz.title, "description": quiz.description,
             "time_limit": quiz.time_limit_minutes,
