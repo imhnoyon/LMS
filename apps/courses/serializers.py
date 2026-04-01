@@ -200,48 +200,18 @@ class QuestionOptionSerializer(serializers.ModelSerializer):
         model = QuestionOption
         fields = ['id', 'text', 'is_correct', 'order']
 
-class AnswerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Answer
-        fields = ["id", "text"]
+
 
 class QuestionSerializer(serializers.ModelSerializer):
     order = serializers.IntegerField(read_only=True)
     options = QuestionOptionSerializer(many=True, required=False)
-    answers = AnswerSerializer(many=True, required=False)
+    
 
     class Meta:
         model = Question
-        fields = ['id', 'question_type', 'text', 'order', 'options', 'answers']
+        fields = ['id', 'question_type', 'text', 'order', 'options', ]
         
-    def create(self, validated_data):
-        options_data = validated_data.pop("options", [])
-        answers_data = validated_data.pop("answers", [])
-
-        quiz = self.context.get("quiz")  # 🔥 important
-
-        question = Question.objects.create(
-            quiz=quiz,
-            **validated_data
-        )
-
-        # MCQ / TRUE_FALSE
-        if question.question_type in ["mcq", "true_false"]:
-            for opt in options_data:
-                QuestionOption.objects.create(
-                    question=question,
-                    **opt
-                )
-
-        # TEXT ANSWER
-        elif question.question_type == "answers":
-            for ans in answers_data:
-                Answer.objects.create(
-                    question=question,
-                    **ans
-                )
-
-        return question
+    
 
 
 class QuizSerializer(serializers.ModelSerializer):
@@ -261,33 +231,7 @@ class QuizSerializer(serializers.ModelSerializer):
         ]
         
         
-    def create(self, validated_data):
-        questions_data = validated_data.pop("questions", [])
-
-        quiz = Quiz.objects.create(**validated_data)
-
-        for question_data in questions_data:
-            serializer = QuestionSerializer(
-                data=question_data,
-                context={"quiz": quiz}
-            )
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-
-        return quiz
     
-    def validate(self, data):
-        q_type = data.get("question_type")
-
-        if q_type in ["mcq", "true_false"] and not data.get("options"):
-            raise serializers.ValidationError("Options required")
-
-        if q_type == "answers" and not data.get("answers"):
-            raise serializers.ValidationError("Answers required")
-
-        return data
-
-
 # Course details serializers
 class CourseAdvanceInfoDetailSerializer(serializers.ModelSerializer):
     class Meta:

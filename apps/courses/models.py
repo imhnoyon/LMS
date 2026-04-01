@@ -239,7 +239,6 @@ class Question(models.Model):
     QUESTION_TYPE_CHOICES = [
         ('mcq',        'Multiple Choice'),
         ('true_false', 'True or False'),
-        ('answers',    'Question Answers'),
     ]
 
     quiz          = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
@@ -274,13 +273,6 @@ class TrueFalseAnswer(models.Model):
     def __str__(self):
         return f"{'True' if self.correct_answer else 'False'} - {self.question}"
     
-
-class Answer(models.Model):
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers')
-    text     = models.CharField(max_length=255)
-
-    def __str__(self):
-        return f"Answer: {self.text}"
 
 
 class Comment(models.Model):

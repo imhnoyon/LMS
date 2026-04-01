@@ -114,12 +114,10 @@ class CartListView(APIView):
         
 from decimal import Decimal
 from django.db import transaction
-
 from decimal import Decimal
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework import status
-
 
 class CreateOrderFromCartView(APIView):
     permission_classes = [IsAuthenticated, IsStudent]
@@ -127,7 +125,7 @@ class CreateOrderFromCartView(APIView):
     @transaction.atomic
     def post(self, request):
         user = request.user
-        coupon_code = request.data.get("coupon_code", "").strip()
+        coupon_code = (request.data.get("coupon_code") or "").strip()
 
         if user.role != "student":
             return APIResponse.error(
@@ -158,11 +156,9 @@ class CreateOrderFromCartView(APIView):
         )
 
         created_items = []
-
         subtotal = Decimal("0.00")
         total_discount = Decimal("0.00")
         total_amount = Decimal("0.00")
-
         matched_coupon = False
         processed_courses = set()
 
@@ -183,41 +179,33 @@ class CreateOrderFromCartView(APIView):
                 continue
 
             original_price = Decimal(course.price)
-
-            # ----------------------------
-            # DEFAULT VALUES
-            # ----------------------------
             discount_amount = Decimal("0.00")
             paid_price = original_price
 
-            # ----------------------------
-            # COUPON LOGIC (FIXED)
-            # ----------------------------
-            if (
-                coupon_code
-                and course.coupon_code
-                and course.coupon_code.lower() == coupon_code.lower()
+            request_coupon = coupon_code.strip().lower()
+            course_coupon = (course.coupon_code or "").strip().lower()
+
+            coupon_matched_for_course = (
+                bool(request_coupon)
+                and bool(course_coupon)
+                and course_coupon == request_coupon
                 and course.is_coupon_valid()
-            ):
+            )
+
+            if coupon_matched_for_course:
                 matched_coupon = True
 
-                # FIX: treat discount_price as DISCOUNT, NOT final price
                 if course.discount_price is not None:
                     discount_amount = Decimal(course.discount_price)
 
-                # prevent overflow
                 if discount_amount > original_price:
                     discount_amount = original_price
 
                 paid_price = original_price - discount_amount
 
-            # safety
             if paid_price < Decimal("0.00"):
                 paid_price = Decimal("0.00")
 
-            # ----------------------------
-            # CREATE ORDER ITEM
-            # ----------------------------
             OrderItem.objects.create(
                 order=order,
                 course=course,
@@ -225,9 +213,6 @@ class CreateOrderFromCartView(APIView):
                 paid_price=paid_price
             )
 
-            # ----------------------------
-            # TOTALS (CORRECT)
-            # ----------------------------
             subtotal += original_price
             total_discount += discount_amount
             total_amount += paid_price
@@ -252,12 +237,15 @@ class CreateOrderFromCartView(APIView):
             order.delete()
             return APIResponse.error(
                 message="Invalid or expired coupon code.",
+                errors={
+                    "coupon_code": "Coupon did not match any course or coupon validity check failed."
+                },
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
         order.subtotal = subtotal
         order.discount_amount = total_discount
-        order.total_amount = total_amount
+        order.total_amount = paid_price
         order.save(update_fields=["subtotal", "discount_amount", "total_amount", "coupon_code"])
 
         cart.cart_items.all().delete()
@@ -275,7 +263,7 @@ class CreateOrderFromCartView(APIView):
                 "items": created_items
             },
             status_code=status.HTTP_201_CREATED
-        )
+        ) 
         
 
 # Add Wishlist course
