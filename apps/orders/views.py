@@ -155,97 +155,90 @@ class CreateOrderFromCartView(APIView):
             coupon_code=coupon_code if coupon_code else None
         )
 
+        # 🔹 Try to find a global coupon (Order-wide)
+        global_coupon = None
+        if coupon_code:
+            global_coupon = Coupon.objects.filter(code=coupon_code).first()
+            if global_coupon and not global_coupon.is_valid():
+                global_coupon = None
+
         created_items = []
         subtotal = Decimal("0.00")
         total_discount = Decimal("0.00")
-        total_amount = Decimal("0.00")
-        matched_coupon = False
+        matched_any_coupon = False
         processed_courses = set()
 
+        # Phase 1: Calculate base prices and course-specific coupons
         for item in cart_items:
             course = item.course
-
-            if course.id in processed_courses:
-                continue
+            if course.id in processed_courses: continue
             processed_courses.add(course.id)
 
-            if Enrollment.objects.filter(user=user, course=course).exists():
+            # Skip Logic
+            if Enrollment.objects.filter(user=user, course=course).exists() or course.instructor == user:
                 continue
-
-            if course.instructor == user:
-                continue
-
             if course.status not in ["published", "accepted", "featured"]:
                 continue
 
             original_price = Decimal(course.price)
-            discount_amount = Decimal("0.00")
             paid_price = original_price
+            course_discount = Decimal("0.00")
 
-            request_coupon = coupon_code.strip().lower()
+            # Check Course-Specific Coupon
             course_coupon = (course.coupon_code or "").strip().lower()
-
-            coupon_matched_for_course = (
-                bool(request_coupon)
-                and bool(course_coupon)
-                and course_coupon == request_coupon
-                and course.is_coupon_valid()
-            )
-
-            if coupon_matched_for_course:
-                matched_coupon = True
-
+            if coupon_code and course_coupon == coupon_code.lower() and course.is_coupon_valid():
+                matched_any_coupon = True
                 if course.discount_price is not None:
-                    discount_amount = Decimal(course.discount_price)
+                    # Logic: discount_price is the FINAL PRICE to pay (e.g. 750.00)
+                    paid_price = Decimal(course.discount_price)
+                    course_discount = original_price - paid_price
 
-                if discount_amount > original_price:
-                    discount_amount = original_price
-
-                paid_price = original_price - discount_amount
-
-            if paid_price < Decimal("0.00"):
-                paid_price = Decimal("0.00")
+            if paid_price < 0: paid_price = 0
 
             OrderItem.objects.create(
-                order=order,
-                course=course,
-                original_price=original_price,
-                paid_price=paid_price
+                order=order, course=course,
+                original_price=original_price, paid_price=paid_price
             )
 
             subtotal += original_price
-            total_discount += discount_amount
-            total_amount += paid_price
-
+            total_discount += course_discount
             created_items.append({
                 "course_id": course.id,
                 "course_title": course.title,
                 "original_price": str(original_price),
-                "discount_amount": str(discount_amount),
-                "paid_price": str(paid_price),
-                "course_coupon_code": course.coupon_code or ""
+                "discount_amount": str(course_discount),
+                "paid_price": str(paid_price)
             })
 
         if not created_items:
             order.delete()
-            return APIResponse.error(
-                message="No valid courses found in cart for order.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(message="No valid courses found in cart.", status_code=400)
 
-        if coupon_code and not matched_coupon:
+        # Phase 2: Apply Global Coupon if no course coupon matched
+        if global_coupon and not matched_any_coupon:
+            matched_any_coupon = True
+            if global_coupon.discount_type == "flat":
+                total_discount = global_coupon.discount_value
+            else: 
+                total_discount = (subtotal * global_coupon.discount_value) / 100
+            
+            
+            if total_discount > subtotal: total_discount = subtotal
+            
+            global_coupon.used_count += 1
+            global_coupon.save(update_fields=['used_count'])
+
+        # Final Verification
+        if coupon_code and not matched_any_coupon:
             order.delete()
-            return APIResponse.error(
-                message="Invalid or expired coupon code.",
-                errors={
-                    "coupon_code": "Coupon did not match any course or coupon validity check failed."
-                },
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+            return APIResponse.error(message="Invalid or expired coupon code.", status_code=400)
+
+        total_amount = subtotal - total_discount
+        if total_amount < 0: total_amount = 0
 
         order.subtotal = subtotal
         order.discount_amount = total_discount
-        order.total_amount = paid_price
+        order.total_amount = total_amount
         order.save(update_fields=["subtotal", "discount_amount", "total_amount", "coupon_code"])
 
         cart.cart_items.all().delete()
