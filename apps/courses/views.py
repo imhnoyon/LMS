@@ -287,17 +287,44 @@ class LectureView(APIView):
 class QuizView(APIView):
     def post(self, request, section_id):
         section = Section.objects.get(pk=section_id)
+
         serializer = QuizSerializer(data=request.data)
         if serializer.is_valid():
             quiz = serializer.save(section=section)
-            # Save questions + options
+
+            # 👉 QUESTIONS AUTO ORDER
+            question_order = 1
+
             for q_data in request.data.get('questions', []):
                 options = q_data.pop('options', [])
-                question = Question.objects.create(quiz=quiz, **q_data)
+
+                question = Question.objects.create(
+                    quiz=quiz,
+                    order=question_order,
+                    **q_data
+                )
+                question_order += 1
+
+                # 👉 OPTIONS AUTO ORDER
+                option_order = 1
+
                 for opt in options:
-                    QuestionOption.objects.create(question=question, **opt)
-            return APIResponse.success(data=QuizSerializer(quiz).data, status_code=status.HTTP_201_CREATED)
-        return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+                    QuestionOption.objects.create(
+                        question=question,
+                        order=option_order,
+                        **opt
+                    )
+                    option_order += 1
+
+            return APIResponse.success(
+                data=QuizSerializer(quiz).data,
+                status_code=status.HTTP_201_CREATED
+            )
+
+        return APIResponse.error(
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 # ── Step 4: Publish 
 class PublishCourseView(APIView):

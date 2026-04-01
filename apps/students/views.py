@@ -126,6 +126,7 @@ class StudentQuizView(APIView):
             "time_limit": quiz.time_limit_minutes,
             "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data
         })
+        
 
 class QuizSubmissionView(APIView):
     permission_classes = [IsAuthenticated]

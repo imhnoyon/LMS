@@ -139,7 +139,7 @@ class LiveClassAttendanceAdmin(admin.ModelAdmin):
     
     
 @admin.register(LecturesProgress)
-class LectureProgressAdmin(admin.ModelAdmin):
+class LecturesProgressAdmin(admin.ModelAdmin):
     list_display = ('course', 'user', 'lecture', 'is_completed')
     list_filter = ('course', 'user')
     search_fields = ('user__full_name',)

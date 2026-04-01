@@ -21,16 +21,27 @@ class CourseBasicSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'status']
 
 
-# Advance Information serializers
+# Advance Information serializer
+import json
+from rest_framework import serializers
+from .models import (
+    CourseAdvanceInfo,
+    CourseOutcome as CourseOutcomeModel,
+    CourseRequirement as CourseRequirementModel,
+)
+
+
 class CourseOutcomeSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CourseOutcome
+        model = CourseOutcomeModel
         fields = ['id', 'text', 'order']
+
 
 class CourseRequirementSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CourseRequirement
+        model = CourseRequirementModel
         fields = ['id', 'text', 'order']
+
 
 class CourseAdvanceInfoSerializer(serializers.ModelSerializer):
     outcomes = serializers.SerializerMethodField(read_only=True)
@@ -41,38 +52,98 @@ class CourseAdvanceInfoSerializer(serializers.ModelSerializer):
         fields = ['id', 'thumbnail', 'trailer_video', 'description', 'outcomes', 'requirements']
 
     def get_outcomes(self, instance):
-        return CourseOutcomeSerializer(instance.course.outcomes.all(), many=True).data
+        return CourseOutcomeSerializer(
+            instance.course.outcomes.all().order_by('order'),
+            many=True
+        ).data
 
     def get_requirements(self, instance):
-        return CourseRequirementSerializer(instance.course.requirements.all(), many=True).data
+        return CourseRequirementSerializer(
+            instance.course.requirements.all().order_by('order'),
+            many=True
+        ).data
+
+    def _parse_json_field(self, field_data):
+        if not field_data:
+            return []
+
+        if isinstance(field_data, str):
+            try:
+                field_data = json.loads(field_data)
+            except json.JSONDecodeError:
+                return []
+
+        if isinstance(field_data, dict):
+            field_data = [field_data]
+
+        if not isinstance(field_data, list):
+            return []
+
+        return field_data
 
     def _process_nested_items(self, course, data_list, model_class):
-        if data_list is None:
-            return
-        
-        # If it's a string (common in multipart forms), try to parse it
-        if isinstance(data_list, str):
-            try:
-                data_list = json.loads(data_list)
-            except (json.JSONDecodeError, TypeError):
-                data_list = []
+        data_list = self._parse_json_field(data_list)
 
-        if not isinstance(data_list, list):
-            data_list = [data_list] if data_list else []
-
-        # Clear existing
         model_class.objects.filter(course=course).delete()
-        
-        for i, item in enumerate(data_list):
+
+        items_to_create = []
+        auto_order = 1
+
+        for item in data_list:
             if isinstance(item, str):
-                model_class.objects.create(course=course, text=item, order=i)
-            elif isinstance(item, dict):
-                text = item.get('text')
+                text = item.strip()
                 if text:
-                    model_class.objects.create(course=course, text=text, order=item.get('order', i))
+                    items_to_create.append(
+                        model_class(
+                            course=course,
+                            text=text,
+                            order=auto_order
+                        )
+                    )
+                    auto_order += 1
+
+            elif isinstance(item, dict):
+                text = str(item.get('text', '')).strip()
+                if not text:
+                    continue
+
+                order = item.get('order')
+                if not order:
+                    order = auto_order
+
+                items_to_create.append(
+                    model_class(
+                        course=course,
+                        text=text,
+                        order=order
+                    )
+                )
+                auto_order += 1
+
+        if items_to_create:
+            model_class.objects.bulk_create(items_to_create)
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        outcomes_data = request.data.get('outcomes') if request else None
+        requirements_data = request.data.get('requirements') if request else None
+
+        advance_info = CourseAdvanceInfo.objects.create(**validated_data)
+
+        self._process_nested_items(
+            advance_info.course,
+            outcomes_data,
+            CourseOutcomeModel
+        )
+        self._process_nested_items(
+            advance_info.course,
+            requirements_data,
+            CourseRequirementModel
+        )
+
+        return advance_info
 
     def update(self, instance, validated_data):
-        # Access raw data from the request because the serializer might filter out non-model fields
         request = self.context.get('request')
         outcomes_data = request.data.get('outcomes') if request else None
         requirements_data = request.data.get('requirements') if request else None
@@ -81,30 +152,37 @@ class CourseAdvanceInfoSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
 
-        self._process_nested_items(instance.course, outcomes_data, CourseOutcome)
-        self._process_nested_items(instance.course, requirements_data, CourseRequirement)
-        
+        if outcomes_data is not None:
+            self._process_nested_items(
+                instance.course,
+                outcomes_data,
+                CourseOutcomeModel
+            )
+
+        if requirements_data is not None:
+            self._process_nested_items(
+                instance.course,
+                requirements_data,
+                CourseRequirementModel
+            )
+
         return instance
-
-    def create(self, validated_data):
-        request = self.context.get('request')
-        outcomes_data = request.data.get('outcomes') if request else None
-        requirements_data = request.data.get('requirements') if request else None
-        
-        course = validated_data.get('course')
-        advance_info = CourseAdvanceInfo.objects.create(**validated_data)
-        
-        self._process_nested_items(course, outcomes_data, CourseOutcome)
-        self._process_nested_items(course, requirements_data, CourseRequirement)
-        
-        return advance_info
-
 
 # Lecture
 class LectureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecture
         fields = ['id', 'name', 'order', 'description', 'video_file', 'LectureAttachment', 'LectureNoteFile',]
+        
+    def create(self, validated_data):
+        section = validated_data.get('section')
+
+        last_lecture = Lecture.objects.filter(section=section).order_by('-order').first()
+        next_order = 1 if not last_lecture else last_lecture.order + 1
+
+        validated_data['order'] = next_order
+        return super().create(validated_data)
+    
 
 
 class SectionSerializer(serializers.ModelSerializer):
@@ -116,25 +194,98 @@ class SectionSerializer(serializers.ModelSerializer):
 
 
 class QuestionOptionSerializer(serializers.ModelSerializer):
+    order = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = QuestionOption
         fields = ['id', 'text', 'is_correct', 'order']
 
+class AnswerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Answer
+        fields = ["id", "text"]
+
 class QuestionSerializer(serializers.ModelSerializer):
+    order = serializers.IntegerField(read_only=True)
     options = QuestionOptionSerializer(many=True, required=False)
+    answers = AnswerSerializer(many=True, required=False)
+
     class Meta:
         model = Question
-        fields = ['id', 'question_type', 'text', 'order', 'options']
+        fields = ['id', 'question_type', 'text', 'order', 'options', 'answers']
+        
+    def create(self, validated_data):
+        options_data = validated_data.pop("options", [])
+        answers_data = validated_data.pop("answers", [])
+
+        quiz = self.context.get("quiz")  # 🔥 important
+
+        question = Question.objects.create(
+            quiz=quiz,
+            **validated_data
+        )
+
+        # MCQ / TRUE_FALSE
+        if question.question_type in ["mcq", "true_false"]:
+            for opt in options_data:
+                QuestionOption.objects.create(
+                    question=question,
+                    **opt
+                )
+
+        # TEXT ANSWER
+        elif question.question_type == "answers":
+            for ans in answers_data:
+                Answer.objects.create(
+                    question=question,
+                    **ans
+                )
+
+        return question
+
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
+
     class Meta:
         model = Quiz
         fields = [
-            'id', 'title', 'description', 'time_limit_minutes', 
-            'attempts_allowed', 'passing_score', 'shuffle_questions', 'questions'
+            'id',
+            'title',
+            'description',
+            'time_limit_minutes',
+            'attempts_allowed',
+            'passing_score',
+            'shuffle_questions',
+            'questions'
         ]
+        
+        
+    def create(self, validated_data):
+        questions_data = validated_data.pop("questions", [])
 
+        quiz = Quiz.objects.create(**validated_data)
+
+        for question_data in questions_data:
+            serializer = QuestionSerializer(
+                data=question_data,
+                context={"quiz": quiz}
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+        return quiz
+    
+    def validate(self, data):
+        q_type = data.get("question_type")
+
+        if q_type in ["mcq", "true_false"] and not data.get("options"):
+            raise serializers.ValidationError("Options required")
+
+        if q_type == "answers" and not data.get("answers"):
+            raise serializers.ValidationError("Answers required")
+
+        return data
 
 
 # Course details serializers
