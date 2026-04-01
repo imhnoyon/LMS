@@ -18,4 +18,6 @@ urlpatterns = [
     # 🔹 Student Profile
     path("profile/", StudentProfileUpdateView.as_view(), name="student-profile-update"),
     path('enroll-courses/', EnrollCourseAPIView.as_view(), name='enroll-course'),
+    
+    path('exam-assessments-courses/', ExamAssessmentAPIView.as_view(), name='enroll-course'),
 ]

@@ -197,10 +197,11 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     
     
     
-    
+ # Enrollment course list
 class EnrollCourseSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
+    course_price=serializers.DecimalField(source="course.price",max_digits=10,decimal_places=2,read_only=True)
     course_progress = serializers.SerializerMethodField()    
     class Meta:
         model = Enrollment
@@ -208,24 +209,93 @@ class EnrollCourseSerializer(serializers.ModelSerializer):
             'id', 
             'course', 
             'course_title', 
+            'course_price',
             'course_thumbnail', 
             'is_active', 
             'is_completed', 
+            'is_started',
             'course_progress',
             'enrolled_at'
         ]
-        
-        def get_course_progress(self, obj):
-            request = self.context.get("request")
-            user = getattr(request, "user", None)
 
-            if not user or not user.is_authenticated:
-                return 0
-
-            if Enrollment.objects.filter(user=user, course=obj).exists():
-                return obj.get_progress_percentage(user)
-
+    def get_course_progress(self, obj):
+        # obj is Enrollment, we need Course and User
+        user = obj.user
+        course = obj.course
+        if not user or not course:
             return 0
+        return course.get_progress_percentage(user)
+    
+    
+    
+# exam & asssessment
+class lectureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lecture
+        fields = ['id', 'name', 'order']
         
+class sectionSerializer(serializers.ModelSerializer):
+    lectures = lectureSerializer(many=True, read_only=True)
+    class Meta:
+        model = Section
+        fields = ['id', 'name', 'order', 'lectures']
+        
+class ExamAssessmentSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
+    course_price=serializers.DecimalField(source="course.price",max_digits=10,decimal_places=2,read_only=True)
+    course_progress = serializers.SerializerMethodField()
+    instructor = serializers.CharField(source="course.instructor.name", read_only=True)   
+    section_count = serializers.SerializerMethodField()
+    lecture_count = serializers.SerializerMethodField() 
+    completed_lecture_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Enrollment
+        fields = [
+            'id', 
+            'course', 
+            'instructor',
+            'course_title', 
+            'course_price',
+            'course_thumbnail', 
+            'is_active', 
+            'is_completed', 
+            'is_started',
+            'section_count',
+            'lecture_count',
+            'completed_lecture_count',
+            'course_progress',
+            'enrolled_at'
+        ]
+
+    def get_course_progress(self, obj):
+        # obj is Enrollment, we need Course and User
+        user = obj.user
+        course = obj.course
+        if not user or not course:
+            return 0
+        return course.get_progress_percentage(user)
+    
+    def get_section_count(self, obj):
+        return obj.course.sections.count()
+    
+    def get_lecture_count(self, obj):
+        from apps.courses.models import Lecture
+        return Lecture.objects.filter(section__course=obj.course).count()
+
+    def get_completed_lecture_count(self, obj):
+        from apps.courses.models import LecturesProgress
+        return LecturesProgress.objects.filter(
+            user=obj.user, 
+            course=obj.course, 
+            is_completed=True
+        ).count()
+        
+    
+        
+        
+        
+
         
     

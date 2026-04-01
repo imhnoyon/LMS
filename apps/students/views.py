@@ -25,7 +25,7 @@ class StudentDashboardView(APIView):
         enrollments = Enrollment.objects.filter(user=user)
 
         enrolled_courses_count = enrollments.count()
-        active_courses_count = enrollments.filter(is_active=True, is_completed=False).count()
+        active_courses_count = enrollments.filter(is_started=True).count()
         completed_courses_count = enrollments.filter(is_completed=True).count()
         recently_enrolled = [
             enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:4]
@@ -59,10 +59,20 @@ class CoursePlayerView(APIView):
 
     def get(self, request, course_id, lecture_id=None):
         course = get_object_or_404(Course, id=course_id)
+        enrollment = Enrollment.objects.filter(
+            user=request.user,
+            course=course
+        ).first()
         
         # Check if student is actually enrolled
         if not Enrollment.objects.filter(user=request.user, course=course).exists():
             return APIResponse.error(message="You are not enrolled in this course.", status_code=403)
+        
+        
+        # First time course open করলে started true হবে
+        if not enrollment.is_started:
+            enrollment.is_started = True
+            enrollment.save(update_fields=["is_started"])
 
         sections = course.sections.prefetch_related("lectures", "quizzes").all()
         current_lecture = None
@@ -212,6 +222,22 @@ class EnrollCourseAPIView(APIView):
     def get(self, request):
         enrollments = Enrollment.objects.filter(user=request.user)
 
+        # Filters
+        is_active = request.query_params.get("is_active")
+        is_completed = request.query_params.get("is_completed")
+        is_started = request.query_params.get("is_started")
+
+        if is_active is not None:
+            enrollments = enrollments.filter(is_active=is_active.lower() == "true")
+
+        if is_completed is not None:
+            enrollments = enrollments.filter(is_completed=is_completed.lower() == "true")
+
+        if is_started is not None:
+            enrollments = enrollments.filter(is_started=is_started.lower() == "true")
+
+        enrollments = enrollments.order_by("-id")
+
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(enrollments, request, view=self)
         serializer = EnrollCourseSerializer(page, many=True, context={"request": request})
@@ -221,34 +247,39 @@ class EnrollCourseAPIView(APIView):
             message="Enrolled courses retrieved successfully."
         )
 
-    def post(self, request):
-        course_id = request.data.get('course')
+    
+        
+        
+class ExamAssessmentAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
 
-        if not course_id:
-            return APIResponse.error(
-                message="Course ID is required.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(user=request.user)
 
-        course = get_object_or_404(Course, id=course_id)
+        # Filters
+        is_active = request.query_params.get("is_active")
+        is_completed = request.query_params.get("is_completed")
+        is_started = request.query_params.get("is_started")
 
-        if Enrollment.objects.filter(user=request.user, course=course).exists():
-            return APIResponse.error(
-                message="You are already enrolled in this course.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+        if is_active is not None:
+            enrollments = enrollments.filter(is_active=is_active.lower() == "true")
 
-        enrollment = Enrollment.objects.create(
-            user=request.user,
-            course=course,
-            is_active=True,
-            is_completed=False
+        if is_completed is not None:
+            enrollments = enrollments.filter(is_completed=is_completed.lower() == "true")
+
+        if is_started is not None:
+            enrollments = enrollments.filter(is_started=is_started.lower() == "true")
+
+        enrollments = enrollments.order_by("-id")
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+        serializer = ExamAssessmentSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Exam assessment courses retrieved successfully."
         )
 
-        serializer = EnrollCourseSerializer(enrollment)
-
-        return APIResponse.success(
-            message="Course enrolled successfully.",
-            data=serializer.data,
-            status_code=status.HTTP_201_CREATED
-        )
+    

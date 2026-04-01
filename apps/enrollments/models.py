@@ -13,6 +13,7 @@ class Enrollment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     is_active = models.BooleanField(default=False)
     is_completed = models.BooleanField(default=False) # When student completes the course, we will mark this as True
+    is_started = models.BooleanField(default=False)
     enrolled_at = models.DateTimeField(auto_now_add=False)
 
     class Meta:
