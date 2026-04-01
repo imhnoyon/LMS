@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from utils.api_response import APIResponse
 from apps.courses.models import *
 from apps.payments.models import Invoice
-from apps.enrollments.models import Enrollment
+from apps.enrollments.models import Enrollment, Certificate
 from .serializers import *
 from .helper_funtion import is_lecture_accessible, get_next_lecture, is_quiz_passed
 from .models import Student
@@ -129,6 +129,49 @@ class CompleteLectureView(APIView):
         progress.completed_at = timezone.now()
         progress.save()
         return APIResponse.success(message="Lecture marked as completed.")
+
+
+class CheckCourseCompletionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        course = get_object_or_404(Course, id=course_id)
+        
+        # 🔹 Check if all lectures are completed
+        total_lectures = Lecture.objects.filter(section__course=course).count()
+        completed_count = LecturesProgress.objects.filter(
+            user=request.user, 
+            course=course, 
+            is_completed=True
+        ).count()
+
+        if total_lectures > 0 and completed_count >= total_lectures:
+            enrollment, _ = Enrollment.objects.get_or_create(user=request.user, course=course)
+            
+            # If not already completed, mark it and generate certificate
+            if not enrollment.is_completed:
+                enrollment.is_completed = True
+                enrollment.save(update_fields=["is_completed"])
+            
+            # Ensure certificate exists
+            certificate, created = Certificate.objects.get_or_create(
+                enrollment=enrollment,
+                defaults={'course_title': course.title}
+            )
+            
+            return APIResponse.success(
+                message="Course completed! Certificate generated." if created else "Course already completed.",
+                data={
+                    "certificate_generated": True,
+                    "certificate_id": str(certificate.certificate_id),
+                    "is_completed": True
+                }
+            )
+        
+        return APIResponse.success(
+            message="Course not yet completed.",
+            data={"certificate_generated": False}
+        )
 
 # 🔹 Quiz taking and submission
 class StudentQuizView(APIView):

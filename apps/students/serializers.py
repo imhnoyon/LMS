@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.users.models import User
-from apps.enrollments.models import Enrollment
+from apps.enrollments.models import Enrollment, Certificate
 from apps.payments.models import Invoice
 from apps.courses.models import (
     Course, Section, Lecture, LecturesProgress, 
@@ -229,17 +229,6 @@ class EnrollCourseSerializer(serializers.ModelSerializer):
     
     
 # exam & asssessment
-class lectureSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Lecture
-        fields = ['id', 'name', 'order']
-        
-class sectionSerializer(serializers.ModelSerializer):
-    lectures = lectureSerializer(many=True, read_only=True)
-    class Meta:
-        model = Section
-        fields = ['id', 'name', 'order', 'lectures']
-        
 class ExamAssessmentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
@@ -270,7 +259,6 @@ class ExamAssessmentSerializer(serializers.ModelSerializer):
         ]
 
     def get_course_progress(self, obj):
-        # obj is Enrollment, we need Course and User
         user = obj.user
         course = obj.course
         if not user or not course:
@@ -294,6 +282,12 @@ class ExamAssessmentSerializer(serializers.ModelSerializer):
         
     
         
+        
+# Course Certificate serializers
+class CertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Certificate
+        fields = ["id",'student_name', "issue_date", "certificate_id"]
         
         
 

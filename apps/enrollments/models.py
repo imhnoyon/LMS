@@ -19,20 +19,55 @@ class Enrollment(models.Model):
     class Meta:
         unique_together = ["user", "course"]
 
+    def save(self, *args, **kwargs):
+        # 🔹 Handle Certificate Generation
+        if self.is_completed:
+            # Check if certificate already exists to avoid duplication
+            if not hasattr(self, 'certificate'):
+                super().save(*args, **kwargs) # Save enrollment first
+                Certificate.objects.get_or_create(
+                    enrollment=self,
+                    defaults={'course_title': self.course.title}
+                )
+                return
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.user.name} - {self.course.title}"
+        return f"{self.user.name} - {self.course.title} ({'Completed' if self.is_completed else 'Active'})"
     
     
 # if we want to generate certificates for students who complete the course, we can create a Certificate model like this ----   
+from django.db import models, transaction
+def generate_certificate_id():
+    with transaction.atomic():
+        last = Certificate.objects.select_for_update().order_by('-id').first()
+
+        if last and last.certificate_id:
+            last_number = int(last.certificate_id.split('-')[-1])
+            new_number = last_number + 1
+        else:
+            new_number = 1
+
+        return f"Learn-Hub-{str(new_number).zfill(4)}"
+    
 class Certificate(models.Model):
     enrollment = models.OneToOneField(Enrollment,on_delete=models.CASCADE,related_name="certificate")
     
     course_title = models.CharField(max_length=255)
-    certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    certificate_id = models.CharField(max_length=50, unique=True, blank=True)
     issue_date = models.DateField(auto_now_add=True)
+    
+    def student_name(self):
+        return self.enrollment.user.name
     
     class Meta:
         ordering = ["-issue_date"]
+        
+        
+    def save(self, *args, **kwargs):
+        if not self.certificate_id:
+            self.certificate_id = generate_certificate_id()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.enrollment.user.name} - {self.enrollment.course.title}"

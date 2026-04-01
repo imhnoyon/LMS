@@ -20,4 +20,5 @@ urlpatterns = [
     path('enroll-courses/', EnrollCourseAPIView.as_view(), name='enroll-course'),
     
     path('exam-assessments-courses/', ExamAssessmentAPIView.as_view(), name='enroll-course'),
+    path('course-completed/<int:course_id>/', CheckCourseCompletionView.as_view(), name='check-course-completion'),
 ]
