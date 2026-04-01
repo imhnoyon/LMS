@@ -3,16 +3,17 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from utils.api_response import APIResponse
-from apps.courses.models import (
-    Course, Section, Lecture, LecturesProgress, 
-    Quiz, QuizAttempt, Question, QuestionOption
-)
+from apps.courses.models import *
 from apps.payments.models import Invoice
 from apps.enrollments.models import Enrollment
-from .serializers import (
-    StudentDashboardSerializer, SectionPlayerSerializer, StudentQuizQuestionSerializer
-)
+from .serializers import *
 from .helper_funtion import is_lecture_accessible, get_next_lecture, is_quiz_passed
+from .models import Student
+from rest_framework import status
+from rest_framework.generics import get_object_or_404
+from utils.permissions import IsStudent
+from utils.paginations import CustomPagination
+
 
 # 🔹 Dashboard Summary
 class StudentDashboardView(APIView):
@@ -31,6 +32,8 @@ class StudentDashboardView(APIView):
         ]
 
         recent_invoices = Invoice.objects.filter(user=user).order_by("-invoice_date", "-created_at")[:10]
+        recent_quizes = QuizAttempt.objects.filter(user=user).order_by( "-submitted_at")[:10]
+        
 
         data = {
             "enrolled_courses_count": enrolled_courses_count,
@@ -38,6 +41,7 @@ class StudentDashboardView(APIView):
             "completed_courses_count": completed_courses_count,
             "recently_enrolled": recently_enrolled,
             "recent_invoices": recent_invoices,
+            "recent_quizes": recent_quizes
         }
 
         serializer = StudentDashboardSerializer(instance=data, context={"request": request})
@@ -155,3 +159,96 @@ class QuizSubmissionView(APIView):
         return APIResponse.success(data={
             "score": score_pct, "passed": score_pct >= quiz.passing_score
         })
+
+
+
+class StudentProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        # Auto-create profile if missing to prevent "No Student matches" error
+        student, _ = Student.objects.get_or_create(user=request.user)
+
+        serializer = StudentProfileSerializer(
+            student,
+            context={"request": request}
+        )
+        return APIResponse.success(
+            message="Student profile retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def patch(self, request):
+        student, _ = Student.objects.get_or_create(user=request.user)
+
+        serializer = StudentProfileSerializer(
+            student,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Student profile updated successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.error(
+            message="Failed to update student profile.",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# Enroll course list views
+class EnrollCourseAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(user=request.user)
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+        serializer = EnrollCourseSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Enrolled courses retrieved successfully."
+        )
+
+    def post(self, request):
+        course_id = request.data.get('course')
+
+        if not course_id:
+            return APIResponse.error(
+                message="Course ID is required.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        course = get_object_or_404(Course, id=course_id)
+
+        if Enrollment.objects.filter(user=request.user, course=course).exists():
+            return APIResponse.error(
+                message="You are already enrolled in this course.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        enrollment = Enrollment.objects.create(
+            user=request.user,
+            course=course,
+            is_active=True,
+            is_completed=False
+        )
+
+        serializer = EnrollCourseSerializer(enrollment)
+
+        return APIResponse.success(
+            message="Course enrolled successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_201_CREATED
+        )

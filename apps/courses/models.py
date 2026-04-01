@@ -370,6 +370,9 @@ class QuizAttempt(models.Model):
 
     class Meta:
         ordering = ["-submitted_at"]
+        
+    def course_name(self):
+        return self.course.title
 
     def __str__(self):
         return f"{self.user} - {self.quiz.title if self.quiz else 'Quiz'} ({self.score_percentage}%)"

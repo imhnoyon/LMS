@@ -46,17 +46,39 @@ class LearnerRegisterSerializer(serializers.ModelSerializer):
 
 
 
-# 🔹 Dashboard Serializers
+#  Dashboard Serializers
 class CourseShortSerializer(serializers.ModelSerializer):
     thumbnail = serializers.ImageField(source="advance_info.thumbnail", read_only=True)
+    course_progress = serializers.SerializerMethodField()
     class Meta:
         model = Course
-        fields = ["id", "title",'subtitle', "thumbnail", "price"]
+        fields = ["id", "title",'subtitle', "thumbnail", "price",'course_progress']
+        
+    def get_course_progress(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if not user or not user.is_authenticated:
+            return 0
+
+        if Enrollment.objects.filter(user=user, course=obj).exists():
+            return obj.get_progress_percentage(user)
+
+        return 0
+       
          
 class InvoiceDashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = ["id", "name", "invoice_id", 'payment_method', "amount", "status", "invoice_date", "created_at"]
+        
+        
+class RecentQuizSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizAttempt
+        fields = ["user", "course_name", "correct_answers", "total_questions", "score_percentage", "submitted_at"]
+        
+    
         
 class StudentDashboardSerializer(serializers.Serializer):
     enrolled_courses_count = serializers.IntegerField()
@@ -64,6 +86,10 @@ class StudentDashboardSerializer(serializers.Serializer):
     completed_courses_count = serializers.IntegerField()
     recently_enrolled = CourseShortSerializer(many=True)
     recent_invoices = InvoiceDashboardSerializer(many=True)
+    recent_quizes = RecentQuizSerializer(many=True)
+    
+
+    
 
 # 🔹 Course Player Serializers
 class LecturePlayerSerializer(serializers.ModelSerializer):
@@ -127,3 +153,79 @@ class StudentQuizQuestionSerializer(serializers.ModelSerializer):
     def get_options(self, obj):
         # Securely return options without is_correct field
         return [{"id": o.id, "text": o.text, "order": o.order} for o in obj.options.all()]
+    
+    
+    
+from .models import Student   
+class StudentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'phone', 'avatar']
+        read_only_fields = ['email']
+
+
+class StudentProfileSerializer(serializers.ModelSerializer):
+    user = StudentSerializer()
+
+    class Meta:
+        model = Student
+        fields = [
+            'id',
+            'title',
+            'date_of_birth',
+            'gender',
+            'bio',
+            'user'
+        ]
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if user_data:
+            user = instance.user
+            for attr, value in user_data.items():
+                if attr == "email":
+                    continue
+                setattr(user, attr, value)
+            user.save()
+
+        return instance
+    
+    
+    
+    
+class EnrollCourseSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
+    course_progress = serializers.SerializerMethodField()    
+    class Meta:
+        model = Enrollment
+        fields = [
+            'id', 
+            'course', 
+            'course_title', 
+            'course_thumbnail', 
+            'is_active', 
+            'is_completed', 
+            'course_progress',
+            'enrolled_at'
+        ]
+        
+        def get_course_progress(self, obj):
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+
+            if not user or not user.is_authenticated:
+                return 0
+
+            if Enrollment.objects.filter(user=user, course=obj).exists():
+                return obj.get_progress_percentage(user)
+
+            return 0
+        
+        
+    
