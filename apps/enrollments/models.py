@@ -11,7 +11,7 @@ class Enrollment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="enrollments")
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     is_completed = models.BooleanField(default=False) # When student completes the course, we will mark this as True
     enrolled_at = models.DateTimeField(auto_now_add=False)
 
@@ -19,7 +19,7 @@ class Enrollment(models.Model):
         unique_together = ["user", "course"]
 
     def __str__(self):
-        return f"{self.user} - {self.course.title}"
+        return f"{self.user.name} - {self.course.title}"
     
     
 # if we want to generate certificates for students who complete the course, we can create a Certificate model like this ----   
@@ -34,7 +34,7 @@ class Certificate(models.Model):
         ordering = ["-issue_date"]
 
     def __str__(self):
-        return f"{self.enrollment.user.username} - {self.enrollment.course.title}"
+        return f"{self.enrollment.user.name} - {self.enrollment.course.title}"
     
     
 """

@@ -2,6 +2,9 @@ from django.db import models
 from apps.users.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import Avg
+from datetime import timedelta
+from django.utils import timezone
 
 
 class Category(models.Model):
@@ -33,11 +36,18 @@ class Course(models.Model):
         ('draft',     'Draft'),
         ('published', 'Published'),
         ('archived',  'Archived'),
+        ('blocked',  'Blocked'),
+        ('featured',  'Featured'),
+        ('accepted',  'Accepted'),
+        ('rejected',  'Rejected'),
     ]
-    EXPIRY_CHOICES = [
-        ('limited',  'Limited Time'),
-        ('lifetime', 'Lifetime'),
-    ]
+    
+    EXPIRY_DURATION_CHOICES = [
+    ('1_week', '1 Week'),
+    ('1_month', '1 Month'),
+    ('3_months', '3 Months'),
+    ('lifetime', 'Lifetime'),
+]
 
     instructor     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
     title          = models.CharField(max_length=80)
@@ -48,12 +58,66 @@ class Course(models.Model):
     level          = models.CharField(max_length=20, choices=LEVEL_CHOICES, blank=True)
     price          = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     discount_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    coupon_code    = models.CharField(max_length=50, blank=True)
-    expiry_type    = models.CharField(max_length=20, choices=EXPIRY_CHOICES, default='lifetime')
+    coupon_code = models.CharField(max_length=50, null=True, blank=True)
+    expiry_type    = models.CharField(max_length=20, choices=EXPIRY_DURATION_CHOICES, default='1_week')
+    expiry_date = models.DateTimeField(null=True, blank=True)
     status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
+    def rating(self):
+        if not self.reviews.exists():
+            return 0
+        return self.reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+    
+    def reviews_count(self):
+        if not self.reviews.exists():
+            return 0
+        return self.reviews.count()
+    
+    def Category(self):
+        if not self.category:
+            return None
+        return self.category.name
+    
+    def get_progress_percentage(self, user):
+        """Calculates the course progress percentage for a specific user based on lectures."""
+        total_lectures = Lecture.objects.filter(section__course=self).count()
+        if total_lectures == 0:
+            return 0
+        
+        completed_lectures = LecturesProgress.objects.filter(
+            user=user, 
+            course=self,
+            is_completed=True
+        ).count()
+        
+        return round((completed_lectures / total_lectures) * 100)
+    
+    
+    def save(self, *args, **kwargs):
+        if not self.expiry_date:  
+            now = timezone.now()
+
+            if self.expiry_type == '1_week':
+                self.expiry_date = now + timedelta(weeks=1)
+
+            elif self.expiry_type == '1_month':
+                self.expiry_date = now + timedelta(days=30)
+
+            elif self.expiry_type == '3_months':
+                self.expiry_date = now + timedelta(days=90)
+
+            elif self.expiry_type == 'lifetime':
+                self.expiry_date = None  
+
+        super().save(*args, **kwargs)
+        
+    def is_coupon_valid(self):
+        if self.expiry_date is None:
+            return True
+        return self.expiry_date >= timezone.now()
+    
     def __str__(self):
         return self.title
 
@@ -103,15 +167,17 @@ class Lecture(models.Model):
     name        = models.CharField(max_length=255)
     order       = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
-    notes_text  = models.TextField(blank=True)
-
+    video_file= models.FileField(upload_to='lectures/videos/', null=True, blank=True)
+    LectureAttachment = models.FileField(upload_to='lectures/attachments/', null=True, blank=True)
+    LectureNoteFile= models.FileField(upload_to='lectures/notes/', null=True, blank=True)
+    
     class Meta:
         ordering = ['order']
 
     def __str__(self):
         return self.name
 
-
+# I don't use this model because all fields are used in lecture model
 class LectureVideo(models.Model):
     lecture    = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='video')
     video_file = models.FileField(upload_to='lectures/videos/')
@@ -146,8 +212,11 @@ class LectureNoteFile(models.Model):
 
     def __str__(self):
         return f"Note File - {self.lecture.name}"
+# I don't use this model because all fields are used in lecture model ended here
 
 
+
+# Started from quiz here
 class Quiz(models.Model):
     lecture            = models.OneToOneField(Lecture, on_delete=models.CASCADE, null=True, blank=True, related_name='quiz')
     section            = models.ForeignKey(Section, on_delete=models.CASCADE, null=True, blank=True, related_name='quizzes')
@@ -170,7 +239,6 @@ class Question(models.Model):
     QUESTION_TYPE_CHOICES = [
         ('mcq',        'Multiple Choice'),
         ('true_false', 'True or False'),
-        ('answers',    'Question Answers'),
     ]
 
     quiz          = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
@@ -204,6 +272,7 @@ class TrueFalseAnswer(models.Model):
 
     def __str__(self):
         return f"{'True' if self.correct_answer else 'False'} - {self.question}"
+    
 
 
 class Comment(models.Model):
@@ -275,3 +344,32 @@ class LiveClassAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student} — {self.live_class} ({self.status})"
+
+
+class LecturesProgress(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    user   = models.ForeignKey(User, on_delete=models.CASCADE)
+    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    last_watched_at = models.DateTimeField(auto_now=True)
+    watched_seconds = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ["course", "user", "lecture"]
+
+
+class QuizAttempt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="quiz_attempts")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="quiz_attempts")
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
+    correct_answers = models.PositiveIntegerField(default=0)
+    total_questions = models.PositiveIntegerField(default=0)
+    score_percentage = models.FloatField(default=0)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.quiz.title if self.quiz else 'Quiz'} ({self.score_percentage}%)"

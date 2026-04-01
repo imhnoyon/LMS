@@ -44,6 +44,11 @@ class Instructor(models.Model):
     class Meta:
         db_table = "instructors"
         ordering = ["-created_at"]
+        
+    def Instructor_name(self):
+        if self.user.name:
+            return f"{self.user.name}"
+        return self.user.email
 
     def __str__(self):
         return f"{self.id} - {self.user.email}"

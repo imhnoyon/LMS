@@ -1,7 +1,7 @@
 from symtable import Class
 
 from django.contrib import admin
-from .models import Category, Course,CourseAdvanceInfo,CourseOutcome,CourseRequirement,Section,Lecture,LectureVideo,LectureAttachment,LectureCaption,LectureNoteFile,Quiz,Question,QuestionOption,TrueFalseAnswer,Comment,Review,LiveClass,LiveClassAttendance
+from .models import *
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -11,7 +11,7 @@ class CategoryAdmin(admin.ModelAdmin):
     
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title','subtitle', 'category', 'instructor','topic','language','level','price','discount_price','coupon_code','status', 'created_at')
+    list_display = ('title','subtitle', 'category', 'instructor','topic','language','level','price','discount_price','coupon_code','status','expiry_type', 'created_at')
     list_filter = ('category', 'instructor', 'created_at')
     search_fields = ('title', 'subtitle', 'description')
     
@@ -45,38 +45,42 @@ class SectionAdmin(admin.ModelAdmin):
     
 @admin.register(Lecture)
 class LectureAdmin(admin.ModelAdmin):
-    list_display = ('section', 'name', 'order','description','notes_text')
+    list_display = ('section', 'name', 'order','description','video_file','LectureAttachment','LectureNoteFile')
     list_filter = ('section',)
     search_fields = ('name',)
 
-@admin.register(LectureVideo)
-class LectureVideoAdmin(admin.ModelAdmin):
-    list_display = ('lecture','video_file','duration')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
+# @admin.register(LectureVideo)
+# class LectureVideoAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','video_file','duration')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
-@admin.register(LectureAttachment)
-class LectureAttachmentAdmin(admin.ModelAdmin):
-    list_display = ('lecture','file','name')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
-    
-    
-@admin.register(LectureCaption)
-class LectureCaptionAdmin(admin.ModelAdmin):
-    list_display = ('lecture','language','file')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
+# @admin.register(LectureAttachment)
+# class LectureAttachmentAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','file','name')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
     
+# @admin.register(LectureCaption)
+# class LectureCaptionAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','language','file')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
     
-@admin.register(LectureNoteFile)
-class LectureNoteFileAdmin(admin.ModelAdmin):
-    list_display = ('lecture','file','name')
-    list_filter =('lecture',)
-    search_fields = ('lecture__name',)
     
     
+# @admin.register(LectureNoteFile)
+# class LectureNoteFileAdmin(admin.ModelAdmin):
+#     list_display = ('lecture','file','name')
+#     list_filter =('lecture',)
+#     search_fields = ('lecture__name',)
+    
+@admin.register(QuizAttempt)
+class QuizAttemptAdmin(admin.ModelAdmin):
+    list_display = ('quiz','user','score_percentage','submitted_at','correct_answers','total_questions')
+    list_filter = ('quiz','user')
+    search_fields = ('user__full_name',)
     
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
@@ -130,3 +134,12 @@ class LiveClassAdmin(admin.ModelAdmin):
 class LiveClassAttendanceAdmin(admin.ModelAdmin):
     list_display = ('live_class', 'student','status', 'joined_at','left_at')
     list_filter = ('live_class', 'student')
+    
+    
+    
+    
+@admin.register(LecturesProgress)
+class LecturesProgressAdmin(admin.ModelAdmin):
+    list_display = ('course', 'user', 'lecture', 'is_completed')
+    list_filter = ('course', 'user')
+    search_fields = ('user__full_name',)

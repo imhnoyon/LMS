@@ -88,7 +88,11 @@ class User(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=["email"]),
             models.Index(fields=["role"]),
         ]
-
+    def get_biography(self):
+        if self.role == "instructor":
+            return self.instructor.biography
+        return None
+    
     def __str__(self):
         return f"{self.email} ({self.get_role_display()})"
 

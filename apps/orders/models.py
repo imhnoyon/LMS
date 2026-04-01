@@ -1,7 +1,6 @@
 from django.db import models
 from apps.users.models import User
 from decimal import Decimal
-from apps.courses.models import Course
 from django.utils import timezone
 import random
 import string
@@ -42,6 +41,27 @@ def generate_order_id():
     random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"ORD-{date_part}-{random_part}"
 
+class Cart(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_cart')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.user.name
+    
+    
+class CartItems(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')
+    course = models.ForeignKey('courses.Course', on_delete=models.CASCADE, null=True, blank=True, related_name='cart_products')
+    course_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.cart.user.name} - {self.course.title}"
 
 class Order(models.Model):
     STATUS_CHOICES = (
@@ -54,8 +74,8 @@ class Order(models.Model):
 
     user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
     order_id    = models.CharField(max_length=50, unique=True, blank=True)
-    coupon      = models.ForeignKey(Coupon, on_delete=models.SET_NULL,null=True, blank=True, related_name="orders")
     status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    coupon_code = models.CharField(max_length=50, null=True, blank=True)
     subtotal        = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     total_amount    = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
@@ -80,31 +100,17 @@ class Order(models.Model):
             self.order_id = order_id
         super().save(*args, **kwargs)
 
-    # ── Calculate subtotal & total ──
     def calculate_totals(self):
-        self.subtotal = sum(
-            (item.paid_price for item in self.items.all()),
-            Decimal("0.00")
-        )
-        self.total_amount = self.subtotal - self.discount_amount
-        self.save(update_fields=["subtotal", "total_amount"])
-
-    # ── Coupon apply ──
-    def apply_coupon(self, coupon):
-        if not coupon.is_valid():
-            raise ValueError("Coupon is not valid")
-        if coupon.discount_type == "percent":
-            self.discount_amount = (self.subtotal * coupon.discount_value) / Decimal("100")
-        else:
-            self.discount_amount = coupon.discount_value
-        self.coupon = coupon
-        self.total_amount = self.subtotal - self.discount_amount
-        self.save(update_fields=["coupon", "discount_amount", "total_amount"])
+        self.subtotal = sum((item.original_price for item in self.items.all()), Decimal("0.00"))
+        paid_total = sum((item.paid_price for item in self.items.all()), Decimal("0.00"))
+        self.discount_amount = self.subtotal - paid_total
+        self.total_amount = paid_total
+        self.save(update_fields=["subtotal", "discount_amount", "total_amount"])
 
     def __str__(self):
         return f"{self.order_id} - {self.user}"
 
-
+from apps.courses.models import Course
 class OrderItem(models.Model):
     order          = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     course         = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="order_items")

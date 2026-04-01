@@ -1,16 +1,27 @@
 from django.contrib import admin
-from .models import Coupon,Order,OrderItem,Wishlist,WishlistItem,OrderItem
+from .models import *
 
 @admin.register(Coupon)
 class CouponAdmin(admin.ModelAdmin):
     list_display = ("code","discount_type",'discount_value','max_uses','used_count','min_order_amount','is_active','valid_to')
     search_fields = ("code",)
     
+@admin.register(Cart)
+class CartAdmin(admin.ModelAdmin):
+    list_display = ("user","created_at")
+    search_fields = ("user__name",)
+    list_filter = ("created_at",)
     
+    
+@admin.register(CartItems)
+class CartItemsAdmin(admin.ModelAdmin):
+    list_display = ("cart","course","created_at")
+    search_fields = ("cart__user__name","course__title")
+    list_filter = ("created_at",)
     
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("order_id","user","status","coupon","subtotal","total_amount","discount_amount","created_at")
+    list_display = ("order_id","user","status","subtotal","total_amount","discount_amount","created_at")
     search_fields = ("order_id","user__full_name")
     list_filter = ("status",)
  
