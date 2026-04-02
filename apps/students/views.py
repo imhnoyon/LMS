@@ -515,3 +515,30 @@ class ChangePasswordAPIView(APIView):
             message="Password changed successfully.",
             status_code=200
         )
+        
+        
+# Delete Account
+class DeleteAccountAPIView(APIView):
+    permission_classes = [IsAuthenticated,IsStudent]
+
+    def delete(self, request):
+        serializer = DeleteAccountSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+        user = request.user
+        password = serializer.validated_data["password"]
+        if not user.check_password(password):
+            return APIResponse.error(
+                message="Password is incorrect.",
+                status_code=400
+            )
+        user.delete()
+        return APIResponse.success(
+            message="Account deleted successfully.",
+            status_code=200
+        )

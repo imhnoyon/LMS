@@ -36,4 +36,7 @@ urlpatterns = [
     #password reset
     path('password-reset/', ChangePasswordAPIView.as_view(), name='password-reset'),
     
+    #delete account
+     path("delete-account/", DeleteAccountAPIView.as_view(), name="delete-account"),
+    
 ]

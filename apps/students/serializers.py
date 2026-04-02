@@ -382,3 +382,8 @@ class ChangePasswordSerializer(serializers.Serializer):
                 "confirm_password": "New password and confirm password do not match."
             })
         return attrs
+    
+    
+    
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
