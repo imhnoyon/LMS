@@ -277,5 +277,42 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','instructor','advance_info', 'outcomes','requirements','sections'] 
         
 # Course details serializers ended here
+
+# Live Class Serializers
+class LiveClassSerializer(serializers.ModelSerializer):
+    instructor_name = serializers.CharField(source='instructor.name', read_only=True)
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    is_recorded = serializers.BooleanField(required=False)
+    platform = serializers.CharField() # 🔹 Override to bypass strict ChoiceField validation
+
+    class Meta:
+        model = LiveClass
+        fields = [
+            'id', 'title', 'instructor', 'instructor_name', 'course', 'course_title',
+            'topic', 'scheduled_date', 'scheduled_time',
+            'platform', 'class_link', 'is_recorded', 'recording_link', 'created_at'
+        ]
+        read_only_fields = ['id', 'instructor', 'course', 'created_at']
+
+    def validate_platform(self, value):
+        normalized = value.lower().replace(" ", "_")
         
-        
+        # Check against actual model choices
+        valid_choices = [choice[0] for choice in LiveClass.PLATFORM_CHOICES]
+        if normalized not in valid_choices:
+            raise serializers.ValidationError(f"Invalid platform. Choose from: {', '.join(valid_choices)}")
+            
+        return normalized
+
+
+class LiveClassAttendanceSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.name', read_only=True)
+    class_title = serializers.CharField(source='live_class.title', read_only=True)
+
+    class Meta:
+        model = LiveClassAttendance
+        fields = [
+            'id', 'live_class', 'class_title', 'student', 'student_name',
+            'status', 'joined_at', 'left_at'
+        ]
+        read_only_fields = ['id', 'joined_at', 'left_at']

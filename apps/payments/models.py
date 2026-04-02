@@ -3,7 +3,7 @@ from apps.users.models import User
 from apps.orders.models import Order
 from django.utils import timezone
 from apps.courses.models import Course
-
+import uuid
 
 # Create your models here.
 class Payment(models.Model):
@@ -195,26 +195,45 @@ class Payout(models.Model):
  
  
 class Withdrawal(models.Model):
-    """User-triggered on-demand withdrawals (Image 2)."""
     STATUS_CHOICES = [
         ('pending',   'Pending'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
     ]
+    WITHDRAW_METHODS = (
+        ("bank_account", "Bank Account"),
+        ("debit_card", "Debit Card"),
+        ("unknown", "Unknown"),
+    )
     user           = models.ForeignKey(User, on_delete=models.CASCADE, related_name='withdrawals')
-    wallet         = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='withdrawals')
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
-    amount         = models.DecimalField(max_digits=10, decimal_places=2)
-    currency       = models.CharField(max_length=3, default='USD')
-    status         = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
-    requested_at   = models.DateTimeField(auto_now_add=True)
-    completed_at   = models.DateTimeField(blank=True, null=True)
- 
-    class Meta:
-        ordering = ['-requested_at']
- 
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    previous_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    withdraw_method = models.CharField(max_length=30, choices=WITHDRAW_METHODS, default="unknown")
+    
+    withdraw_id = models.CharField(max_length=100, unique=True, editable=False)
+    stripe_transfer_id = models.CharField(max_length=255, null=True, blank=True)
+    stripe_payout_id = models.CharField(max_length=255, null=True, blank=True)
+    failure_reason = models.TextField(null=True, blank=True)
+
+    bank_name = models.CharField(max_length=255, null=True, blank=True)
+    bank_last4 = models.CharField(max_length=10, null=True, blank=True)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.withdraw_id:
+            self.withdraw_id = f"WDR-{uuid.uuid4().hex[:10].upper()}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Withdrawal #{self.pk} — {self.amount} ({self.status})"
+        return f"{self.withdraw_id} - {self.user.name} - {self.amount}"
+ 
+ 
+ 
  
  
 class DailyRevenueSnapshot(models.Model):
@@ -262,6 +281,11 @@ class Invoice(models.Model):
     def __str__(self):
         return f"{self.invoice_id} — {self.amount} {self.currency}"
           
+
+
+
+
+
 
 """
 Written by Mahedi Hasan Noyon

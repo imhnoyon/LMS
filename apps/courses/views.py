@@ -440,3 +440,95 @@ class courseDetail(APIView):
     
     
 
+# ── Live Class Management (Instructor) ───────────────────────────────────
+
+class LiveClassManageView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
+    pagination_class = CustomPagination
+
+    def post(self, request, course_id):
+        course = get_object_or_404(Course, pk=course_id, instructor=request.user)
+        serializer = LiveClassSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(course=course, instructor=request.user)
+            return APIResponse.success(
+                message="Live class scheduled successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+        return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+
+    def get(self, request, course_id):
+        course = get_object_or_404(Course, pk=course_id)
+        live_classes = LiveClass.objects.filter(course=course).order_by('-scheduled_date', '-scheduled_time')
+        
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(live_classes, request)
+        serializer = LiveClassSerializer(page, many=True)
+        
+        return paginator.get_paginated_response(serializer.data)
+
+    def patch(self, request, course_id, class_id):
+        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id, instructor=request.user)
+        serializer = LiveClassSerializer(live_class, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Live class updated successfully.",
+                data=serializer.data
+            )
+        return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, course_id, class_id):
+        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id, instructor=request.user)
+        live_class.delete()
+        return APIResponse.success(message="Live class deleted successfully.")
+
+
+# ── Instructor Live Class Stats 
+class InstructorLiveClassStatsView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
+
+    def get(self, request):
+        from django.utils import timezone
+        now = timezone.now()
+        
+        live_classes = LiveClass.objects.filter(instructor=request.user)
+        
+        total_live_classes = live_classes.count()
+        
+        upcoming_sessions = live_classes.filter(
+            Q(scheduled_date__gt=now.date()) | 
+            Q(scheduled_date=now.date(), scheduled_time__gt=now.time())
+        ).order_by('scheduled_date', 'scheduled_time')
+        
+        past_sessions = live_classes.filter(
+            Q(scheduled_date__lt=now.date()) | 
+            Q(scheduled_date=now.date(), scheduled_time__lte=now.time())
+        ).order_by('-scheduled_date', '-scheduled_time')
+        
+        upcoming_live_classes_count = upcoming_sessions.count()
+        
+        # Students enrolled in instructor's courses that have live classes
+        from apps.enrollments.models import Enrollment
+        students_enrolled = Enrollment.objects.filter(
+            course__instructor=request.user, 
+            is_active=True
+        ).values('user').distinct().count()
+
+        # Serializing session lists for the dashboard
+        upcoming_serialized = LiveClassSerializer(upcoming_sessions, many=True).data
+        past_serialized = LiveClassSerializer(past_sessions, many=True).data
+
+        return APIResponse.success(
+            data={
+                "total_live_classes": total_live_classes,
+                "upcoming_live_classes_count": upcoming_live_classes_count,
+                "students_enrolled": students_enrolled,
+                "upcoming_sessions": upcoming_serialized,
+                "past_sessions": past_serialized
+            }
+        )
+
+

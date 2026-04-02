@@ -38,5 +38,10 @@ urlpatterns = [
     
     #delete account
      path("delete-account/", DeleteAccountAPIView.as_view(), name="delete-account"),
+     
+     
+    # live classes
+    path('student/live-classes/upcoming/',StudentLiveClassListView.as_view(),name='student-upcoming-live-class-list'),
+    path('joint-live-class/<int:live_class_id>/',JoinLiveClassView.as_view(),name='joint-live-class'),
     
 ]

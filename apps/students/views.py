@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from utils.permissions import IsStudent
 from utils.paginations import CustomPagination
-
+from django.db.models import Q
 
 # 🔹 Dashboard Summary
 class StudentDashboardView(APIView):
@@ -541,4 +541,89 @@ class DeleteAccountAPIView(APIView):
         return APIResponse.success(
             message="Account deleted successfully.",
             status_code=200
+        )
+        
+        
+# Live course
+class StudentLiveClassListView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        today = timezone.localdate()
+        now_time = timezone.localtime().time()
+
+        enrolled_course_ids = Enrollment.objects.filter(
+            user=request.user,
+            is_active=True
+        ).values_list("course_id", flat=True)
+
+        base_queryset = LiveClass.objects.filter(
+            course_id__in=enrolled_course_ids
+        ).select_related("instructor", "course")
+
+        upcoming_live_classes = base_queryset.filter(
+            Q(scheduled_date__gt=today) |
+            Q(scheduled_date=today, scheduled_time__gte=now_time)
+        ).order_by("scheduled_date", "scheduled_time")
+
+        past_live_classes = base_queryset.filter(
+            Q(scheduled_date__lt=today) |
+            Q(scheduled_date=today, scheduled_time__lt=now_time)
+        ).order_by("-scheduled_date", "-scheduled_time")
+
+        upcoming_serializer = LiveClassStudentSerializer(upcoming_live_classes, many=True, context={"request": request})
+        past_serializer = LiveClassStudentSerializer(past_live_classes, many=True, context={"request": request})
+
+        return APIResponse.success(
+            message="Live classes fetched successfully.",
+            data={
+                "upcoming_live_classes": upcoming_serializer.data,
+                "past_live_classes": past_serializer.data,
+            },
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+        
+        
+#join live classes 
+class JoinLiveClassView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def post(self, request, live_class_id):
+        live_class = get_object_or_404(LiveClass, pk=live_class_id)
+
+        # enrollment check
+        is_enrolled = Enrollment.objects.filter(
+            user=request.user,
+            course=live_class.course,
+            is_active=True
+        ).exists()
+
+        if not is_enrolled:
+            return APIResponse.error(
+                message="You are not enrolled in this course.",
+                status_code=403
+            )
+
+        attendance, created = LiveClassAttendance.objects.get_or_create(
+            live_class=live_class,
+            student=request.user,
+            defaults={
+                "status": "attended",
+                "joined_at": timezone.now()
+            }
+        )
+
+        if not created:
+            attendance.status = "attended"
+            attendance.joined_at = timezone.now()
+            attendance.save()
+
+        return APIResponse.success(
+            message="Joined live class successfully.",
+            data={
+                "class_link": live_class.class_link
+            }
         )
