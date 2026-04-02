@@ -20,7 +20,7 @@ class Enrollment(models.Model):
         unique_together = ["user", "course"]
 
     def save(self, *args, **kwargs):
-        # 🔹 Handle Certificate Generation
+        #  Handle Certificate Generation
         if self.is_completed:
             # Check if certificate already exists to avoid duplication
             if not hasattr(self, 'certificate'):
@@ -59,11 +59,8 @@ class Certificate(models.Model):
     
     def student_name(self):
         return self.enrollment.user.name
-    
     class Meta:
         ordering = ["-issue_date"]
-        
-        
     def save(self, *args, **kwargs):
         if not self.certificate_id:
             self.certificate_id = generate_certificate_id()

@@ -301,7 +301,7 @@ class Review(models.Model):
         unique_together = ('course', 'user')
 
     def __str__(self):
-        return f"Review by {self.user.username} - {self.rating} Stars"
+        return f"Review by {self.user.name} - {self.rating} Stars"
 
 
 class LiveClass(models.Model):

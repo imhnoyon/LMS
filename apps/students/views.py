@@ -326,3 +326,192 @@ class ExamAssessmentAPIView(APIView):
         )
 
     
+# Course Review APIView
+class CreateReviewView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def post(self, request, course_id):
+        course = get_object_or_404(Course, id=course_id)
+
+        if not Enrollment.objects.filter(course=course,user=request.user,is_active=True).exists():
+            return APIResponse.error(
+                message="You must enroll in this course to submit a review.",
+                status_code=403
+            )
+        if Review.objects.filter(course=course, user=request.user).exists():
+            return APIResponse.error(
+                message="You have already reviewed this course.",
+                status_code=400
+            )
+            
+        
+
+        serializer = ReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(course=course, user=request.user)
+
+            return APIResponse.success(
+                message="Review submitted successfully.",
+                data=serializer.data,
+                status_code=201
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+    def patch(self, request, review_id):
+        review = get_object_or_404(Review, id=review_id)
+
+        if review.user != request.user:
+            return APIResponse.error(
+                message="You are not allowed to update this review.",
+                status_code=403
+            )
+
+        serializer = ReviewSerializer(review, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+
+            return APIResponse.success(
+                message="Review updated successfully.",
+                data=serializer.data,
+                status_code=200
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+        
+    def delete(self, request, review_id):
+        review = get_object_or_404(Review, id=review_id)
+        if review.user != request.user:
+            return APIResponse.error(
+                message="You are not allowed to delete this review.",
+                status_code=403
+            )
+        review.delete()
+        return APIResponse.success(
+            message="Review deleted successfully.",
+            status_code=204
+        )
+        
+        
+ # Review List       
+class ReviewListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        reviews = Review.objects.filter(user=request.user).order_by('-created_at')
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(reviews, request, view=self)
+        serializer = ReviewListSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Reviews retrieved successfully."
+        )
+        
+        
+# Course Quiz Attempt list      
+class CourseQuizAttemptListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        attempts = QuizAttempt.objects.filter(
+            user=request.user
+        ).select_related(
+            "user",
+            "course",
+            "quiz",
+        ).order_by("-submitted_at")
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(attempts, request, view=self)
+        serializer = CourseQuizAttemptSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Quiz attempts retrieved successfully."
+        )      
+        
+        
+         
+# Course Purchase History      
+class CoursePurchaseHistoryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(
+            user=request.user
+        ).select_related(
+            "course",
+            "course__instructor",
+            "course__advance_info"
+        ).order_by("-enrolled_at")
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+
+        serializer = CoursePurchasesHistory(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Course purchase history retrieved successfully."
+        )
+    
+
+# Change Password api
+class ChangePasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated,]
+
+    def patch(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+
+        user = request.user
+        old_password = serializer.validated_data["old_password"]
+        new_password = serializer.validated_data["new_password"]
+
+        if not user.check_password(old_password):
+            return APIResponse.error(
+                message="Old password is incorrect.",
+                status_code=400
+            )
+
+        if old_password == new_password:
+            return APIResponse.error(
+                message="New password must be different from old password.",
+                status_code=400
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        return APIResponse.success(
+            message="Password changed successfully.",
+            status_code=200
+        )

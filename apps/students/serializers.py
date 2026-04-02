@@ -2,10 +2,7 @@ from rest_framework import serializers
 from apps.users.models import User
 from apps.enrollments.models import Enrollment, Certificate
 from apps.payments.models import Invoice
-from apps.courses.models import (
-    Course, Section, Lecture, LecturesProgress, 
-    Quiz, QuizAttempt, Question, QuestionOption
-)
+from apps.courses.models import *
 from .helper_funtion import is_lecture_accessible, is_quiz_passed
 
 class LearnerRegisterSerializer(serializers.ModelSerializer):
@@ -290,6 +287,98 @@ class CertificateSerializer(serializers.ModelSerializer):
         fields = ["id",'student_name', "issue_date", "certificate_id"]
         
         
+        
+# Course Review serializers
+class ReviewSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='user.name', read_only=True)
+    course_title = serializers.CharField(source='course.title', read_only=True)
+
+    class Meta:
+        model = Review
+        fields = [
+            'id',
+            'course',
+            'course_title',
+            'user',
+            'student_name',
+            'rating',
+            'comment',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'user', 'course', 'created_at', 'updated_at']
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
+
+        
+        
+class ReviewListSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='user.name', read_only=True)
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    avatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = [
+            'id',
+            'course',
+            'course_title',
+            'user',
+            'student_name',
+            'rating',
+            'comment',
+            'avatar',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'user', 'course', 'created_at', 'updated_at']
+
+    def get_avatar(self, obj):
+        request = self.context.get("request")
+        if hasattr(obj.user, 'avatar') and obj.user.avatar:
+            return request.build_absolute_uri(obj.user.avatar.url) if request else obj.user.avatar.url
+        return None
 
         
     
+class CourseQuizAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizAttempt
+        fields = ["id", "user",'course','quiz', "course_name", "correct_answers", "total_questions", "score_percentage", "submitted_at"]    
+        
+    
+
+class CoursePurchasesHistory(serializers.ModelSerializer):
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
+    course_price=serializers.DecimalField(source="course.price",max_digits=10,decimal_places=2,read_only=True)
+    instructor = serializers.CharField(source="course.instructor.name", read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = [
+            'id', 
+            'course', 
+            'instructor',
+            'course_title', 
+            'course_price',
+            'course_thumbnail', 
+            'enrolled_at'
+        ]
+
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({
+                "confirm_password": "New password and confirm password do not match."
+            })
+        return attrs

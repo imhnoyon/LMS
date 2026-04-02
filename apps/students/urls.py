@@ -21,4 +21,19 @@ urlpatterns = [
     
     path('exam-assessments-courses/', ExamAssessmentAPIView.as_view(), name='enroll-course'),
     path('course-completed/<int:course_id>/', CheckCourseCompletionView.as_view(), name='check-course-completion'),
+    
+    #review 
+    path('reviews/<int:course_id>/', CreateReviewView.as_view(), name='course-reviews'),
+    path('reviews-updated/<int:review_id>/', CreateReviewView.as_view(), name='course-reviews'),
+    path('review-list/', ReviewListAPIView.as_view(), name='delete-review'),
+    
+    # quiz attempts-list
+    path('quiz-attempts-list/', CourseQuizAttemptListAPIView.as_view(), name='quiz-attempts-list'),
+    
+    #purchase-history
+    path('student/purchase-history/', CoursePurchaseHistoryAPIView.as_view(), name='purchase-history'),
+    
+    #password reset
+    path('password-reset/', ChangePasswordAPIView.as_view(), name='password-reset'),
+    
 ]
