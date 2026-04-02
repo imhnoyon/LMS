@@ -88,3 +88,10 @@ class ApproveInstructorSerializer(serializers.ModelSerializer):
     
     
     
+    
+# course course
+from apps.courses.models import Course
+class CourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price', 'discount_price', 'coupon_code', 'expiry_type', 'status', 'created_at']

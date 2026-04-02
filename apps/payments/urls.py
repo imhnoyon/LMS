@@ -6,4 +6,7 @@ urlpatterns = [
     path("stripe/webhook/", StripeWebhookView.as_view(), name="stripe-webhook"),
     path("stripe/success/", PaymentSuccessView.as_view(), name="payment-success"),
     path("stripe/cancel/", PaymentCancelView.as_view(), name="payment-cancel"),
+    
+    
+    
 ]

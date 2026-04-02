@@ -6,4 +6,9 @@ urlpatterns = [
     path("approve-instructor/<str:pk>/", ApproveInstructorView.as_view(), name="approve-instructor"),
     path("feature-instructor/<str:pk>/", FeatureApprovedInstructorView.as_view(), name="feature-instructor"),
     path("delete-instructor/<str:pk>/", DeleteInstructorView.as_view(), name="delete-instructor"),
+    
+    
+    
+    # course list seen by instructor approve or not
+    path("courses/", CourseListView.as_view(), name="course-list"),
 ]

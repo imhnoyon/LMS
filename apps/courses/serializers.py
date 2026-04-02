@@ -283,14 +283,15 @@ class LiveClassSerializer(serializers.ModelSerializer):
     instructor_name = serializers.CharField(source='instructor.name', read_only=True)
     course_title = serializers.CharField(source='course.title', read_only=True)
     is_recorded = serializers.BooleanField(required=False)
-    platform = serializers.CharField() # 🔹 Override to bypass strict ChoiceField validation
+    
+    # 🔹 Override to bypass strict ChoiceField validation
 
     class Meta:
         model = LiveClass
         fields = [
             'id', 'title', 'instructor', 'instructor_name', 'course', 'course_title',
             'topic', 'scheduled_date', 'scheduled_time',
-            'platform', 'class_link', 'is_recorded', 'recording_link', 'created_at'
+            'platform', 'class_link', 'is_recorded',  'created_at'
         ]
         read_only_fields = ['id', 'instructor', 'course', 'created_at']
 

@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q,Count
 from apps.instructors.models import Instructor
 from apps.instructors.serializers import *
 from utils.api_response import APIResponse
@@ -111,3 +111,65 @@ class DeleteInstructorView(APIView):
             status_code=200
         )
     
+    
+class CourseListView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get("search")
+        category = request.query_params.get("category")
+        status_param = request.query_params.get("status")
+        language = request.query_params.get("language")
+        level = request.query_params.get("level")
+
+        courses = Course.objects.all().order_by("-id")
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category_id=category)
+
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
+
+        if language:
+            courses = courses.filter(language__iexact=language)
+
+        if level:
+            courses = courses.filter(level__iexact=level)
+
+        # top summary stats
+        all_course_stats = Course.objects.aggregate(
+            approved_courses=Count("id", filter=Q(status="Accepted")),
+            published_courses=Count("id", filter=Q(status="Published")),
+            pending_review_courses=Count("id", filter=Q(status="Draft"))
+        )
+
+        paginator = self.pagination_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+        serializer = CourseSerializer(paginated_courses, many=True)
+
+        return APIResponse.success(
+            message="Courses fetched successfully.",
+            data={
+                "stats": {
+                    "approved_courses": all_course_stats["approved_courses"],
+                    "published_courses": all_course_stats["published_courses"],
+                    "pending_review_courses": all_course_stats["pending_review_courses"],
+                },
+                "total": paginator.page.paginator.count,
+                "page": paginator.page.number,
+                "page_size": paginator.get_page_size(request),
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
+            status_code=200
+        )
