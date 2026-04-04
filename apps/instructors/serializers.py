@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from apps.instructors.models import Instructor
 from apps.organizations.models import Invitation, Membership
+from apps.payments.models import Withdrawal
 from apps.students.models import Student
 from apps.users.models import User
 
@@ -130,7 +131,7 @@ class InstructorProfileSerializer(serializers.ModelSerializer):
     
     
     
-    
+ # Dashboard serializers   
 class RecentActivitySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     student_name = serializers.CharField()
@@ -168,3 +169,33 @@ class InstructorDashboardSerializer(serializers.Serializer):
     monthly_revenue_chart = RevenueChartSerializer(many=True)
     rating_breakdown = RatingBreakdownSerializer(many=True)
     course_overview_chart = CourseOverviewChartSerializer(many=True)
+    
+    
+    
+    
+# Earnings serializers
+class WithdrawalSerializer(serializers.ModelSerializer):
+   class Meta:
+        model = Withdrawal
+        fields = ['id','withdraw_id', 'user_name', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at']
+    
+class RevenueChartSerializer2(serializers.Serializer):
+    label = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+class InstructorEarningsSerializer(serializers.Serializer):
+    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_withdrawals = serializers.DecimalField(max_digits=12, decimal_places=2)
+    today_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    current_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    withdrawals = WithdrawalSerializer(many=True, read_only=True)
+    monthly_revenue_chart = RevenueChartSerializer2(many=True)
+
+
+
+# Withdraw request serializer
+class WithdrawalRequestSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.name", read_only=True)
+    class Meta:
+        model = Withdrawal
+        fields = ['id','withdraw_id', 'user_name', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at']

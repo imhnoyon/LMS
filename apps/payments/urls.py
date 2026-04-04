@@ -15,6 +15,8 @@ urlpatterns = [
     path("stripe/dashboard-link/", StripeDashboardLoginLinkView.as_view()),
     path("withdraw/request/", WithdrawRequestView.as_view()),
     path("withdraw/approve/<str:withdraw_id>/", ApproveWithdrawView.as_view()),
+    path("instructor/withdraw/cancel/<str:withdraw_id>/",InstructorCancelWithdrawView.as_view(),name="instructor-withdraw-cancel",
+),
     
     path("stripe/return-page/", StripeReturnPageView.as_view(), name="stripe-return-page"),
     path("stripe/cancel/", StripeCancelPageView.as_view(), name="stripe-cancel"),

@@ -8,13 +8,13 @@ from django.utils import timezone
 from apps.enrollments.models import Enrollment
 from apps.instructors.models import Instructor
 from apps.instructors.serializers import *
-from apps.payments.models import Commission
+from apps.payments.models import Commission, Withdrawal
 from utils.api_response import APIResponse
 from utils.paginations import CustomPagination
 from apps.courses.models import Course, LiveClass, Review
 from utils.permissions import IsInstructor, IsStudent
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, timedelta
 from django.utils import timezone
 from django.db.models.functions import TruncDate, TruncMonth
 
@@ -412,3 +412,87 @@ class InstructorDashboardView(APIView):
             },
             status_code=status.HTTP_200_OK
         )
+        
+        
+
+# Instructor Earnings View
+class InstructorEarningsView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def get(self, request):
+        user = request.user
+        today = timezone.now().date()
+
+        total_revenue = Commission.objects.filter( user=user ).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
+
+        total_withdrawals = Withdrawal.objects.filter( user=user, status="completed" ).aggregate( total=Sum("amount"))["total"] or Decimal("0.00")
+
+        today_revenue = Commission.objects.filter(user=user,created_at__date=today).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
+        
+        current_balance = total_revenue - total_withdrawals
+        
+        withdrawals_qs = Withdrawal.objects.filter(user=user).order_by("-requested_at")
+        
+        # ✅ Daily revenue statistic for current month
+         # current month day-wise revenue
+        month_start = today.replace(day=1)
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        month_end = today.replace(day=last_day)
+
+        revenue_rows = Commission.objects.filter(
+            user=user,
+            created_at__date__range=[month_start, month_end]
+        ).annotate(
+            day=TruncDate("created_at")
+        ).values("day").annotate(
+            total=Sum("commission_amount")
+        ).order_by("day")
+
+        # safe map
+        revenue_map = {
+            row["day"].strftime("%Y-%m-%d"): row["total"] or Decimal("0.00")
+            for row in revenue_rows
+        }
+
+        daily_revenue_chart = []
+        for day_num in range(1, last_day + 1):
+            current_day = date(today.year, today.month, day_num)
+            current_day_str = current_day.strftime("%Y-%m-%d")
+
+            daily_revenue_chart.append({
+                "label": current_day.strftime("%b %d"),
+                "amount": revenue_map.get(current_day_str, Decimal("0.00"))
+            })
+        serializer = InstructorEarningsSerializer({
+            "total_revenue": total_revenue,
+            "total_withdrawals": total_withdrawals,
+            "current_balance": current_balance,
+            "today_revenue": today_revenue,
+            "withdrawals": withdrawals_qs,
+            "monthly_revenue_chart": daily_revenue_chart
+        })
+
+        return APIResponse.success(
+            message="Instructor earnings fetched successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+# Withdrawal Request List
+class WithdrawalRequestListView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]  
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        withdrawals = Withdrawal.objects.filter(
+            status__in=["pending", "completed", "rejected"]
+        ).select_related("user").order_by("-requested_at")
+
+        paginator = self.pagination_class()
+        paginated_data = paginator.paginate_queryset(withdrawals, request)
+
+        serializer = WithdrawalRequestSerializer(paginated_data, many=True)
+
+        return paginator.get_paginated_response(serializer.data)

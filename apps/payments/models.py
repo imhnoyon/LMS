@@ -199,6 +199,7 @@ class Withdrawal(models.Model):
         ('pending',   'Pending'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+        ('rejected', 'Rejected'),
     ]
     WITHDRAW_METHODS = (
         ("bank_account", "Bank Account"),

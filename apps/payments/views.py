@@ -493,12 +493,12 @@ class WithdrawRequestView(APIView):
         if amount <= 0:
             return APIResponse.error("Amount must be greater than 0", 400)
 
-        # ✅ Total earnings (from commission)
+        #  Total earnings (from commission)
         total_earnings = Commission.objects.filter(
             user=user
         ).aggregate(total=Sum("commission_amount"))["total"] or Decimal("0.00")
 
-        # ✅ Already withdrawn
+        #  Already withdrawn
         withdrawn_amount = Withdrawal.objects.filter(
             user=user,
             status__in=["pending", "completed"]
@@ -511,7 +511,7 @@ class WithdrawRequestView(APIView):
                 f"Insufficient balance. Available: {available_balance}", 400
             )
 
-        # ✅ Stripe account check
+        #  Stripe account check
         instructor = user.instructor
         if not instructor.stripe_account_id:
             return APIResponse.error("Stripe account not connected", 400)
@@ -524,7 +524,7 @@ class WithdrawRequestView(APIView):
         if not account.payouts_enabled:
             return APIResponse.error("Stripe payouts not enabled", 400)
 
-        # ✅ Retrieve Bank / Card details automatically from Stripe
+        #  Retrieve Bank / Card details automatically from Stripe
         bank_name = request.data.get("bank_name", "")
         bank_last4 = ""
 
@@ -541,7 +541,7 @@ class WithdrawRequestView(APIView):
                 bank_name = f"{brand} Card"
                 bank_last4 = getattr(default_acc, "last4", "")
 
-        # ✅ Create withdrawal
+        #  Create withdrawal
         withdrawal = Withdrawal.objects.create(
             user=user,
             amount=amount,
@@ -565,9 +565,9 @@ class WithdrawRequestView(APIView):
 
 
 
-
+# Admin view to approve or reject withdrawal requests
 class ApproveWithdrawView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminUser]
 
     @transaction.atomic
     def post(self, request, withdraw_id):
@@ -587,9 +587,9 @@ class ApproveWithdrawView(APIView):
 
         status_value = status_value.lower()
 
-        if status_value not in ["completed", "cancelled"]:
+        if status_value not in ["completed", "rejected"]:
             return APIResponse.error(
-                message="Invalid status. Use 'completed' or 'cancelled'.",
+                message="Invalid status. Use 'completed' or 'rejected'.",
                 status_code=400
             )
 
@@ -604,13 +604,13 @@ class ApproveWithdrawView(APIView):
         instructor = withdrawal.user.instructor
 
         # cancel flow
-        if status_value == "cancelled":
-            withdrawal.status = "cancelled"
-            withdrawal.failure_reason = request.data.get("failure_reason", "Cancelled by admin.")
+        if status_value == "rejected":
+            withdrawal.status = "rejected"
+            withdrawal.failure_reason = request.data.get("failure_reason", "Rejected by admin.")
             withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
 
             return APIResponse.success(
-                message="Withdrawal cancelled successfully.",
+                message="Withdrawal rejected successfully.",
                 data={
                     "withdraw_id": withdrawal.withdraw_id,
                     "status": withdrawal.status,
@@ -657,3 +657,38 @@ class ApproveWithdrawView(APIView):
                 errors={"stripe_error": str(e)},
                 status_code=400
             )
+            
+# Instructor view to cancel their pending withdrawal request           
+class InstructorCancelWithdrawView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    @transaction.atomic
+    def post(self, request, withdraw_id):
+        withdrawal = get_object_or_404(
+            Withdrawal,
+            withdraw_id=withdraw_id,
+            user=request.user
+        )
+
+        if withdrawal.status != "pending":
+            return APIResponse.error(
+                message="Only pending withdrawal requests can be cancelled.",
+                status_code=400
+            )
+
+        withdrawal.status = "cancelled"
+        withdrawal.failure_reason = request.data.get(
+            "failure_reason",
+            "Cancelled by instructor."
+        )
+        withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+        return APIResponse.success(
+            message="Withdrawal request cancelled successfully.",
+            data={
+                "withdraw_id": withdrawal.withdraw_id,
+                "status": withdrawal.status,
+                "failure_reason": withdrawal.failure_reason,
+            },
+            status_code=200
+        )
