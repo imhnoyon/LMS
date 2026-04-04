@@ -228,6 +228,12 @@ class Withdrawal(models.Model):
         if not self.withdraw_id:
             self.withdraw_id = f"WDR-{uuid.uuid4().hex[:10].upper()}"
         super().save(*args, **kwargs)
+        
+        
+    def user_name(self):
+        if self.user:
+            return self.user.name
+        return None
 
     def __str__(self):
         return f"{self.withdraw_id} - {self.user.name} - {self.amount}"

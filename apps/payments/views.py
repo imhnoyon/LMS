@@ -4,8 +4,9 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from utils.api_response import APIResponse
 from apps.orders.models import Order
+from utils.permissions import IsInstructor
 from .models import Payment
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework import status
 import stripe
 from django.db import transaction
@@ -13,10 +14,11 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from apps.enrollments.models import Enrollment
 from apps.payments.models import Invoice, Withdrawal, Commission
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.views import View
 from datetime import date
 from django.urls import reverse
+from django.db.models import Sum
 
 
 # Initialize Stripe with API key
@@ -343,6 +345,7 @@ class StripeWebhookView(APIView):
     def handle_charge_updated(self, charge):
         pass
 
+
 class PaymentSuccessView(View):
     """Render payment success page"""
     def get(self, request):
@@ -352,6 +355,13 @@ class PaymentSuccessView(View):
             'current_time': timezone.now()
         }
         return render(request, 'payment_success.html', context)
+    
+class StripeReturnPageView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return render(request, "account_connected_success.html")
 
 
 class PaymentCancelView(View):
@@ -363,4 +373,287 @@ class PaymentCancelView(View):
         return render(request, 'payment_cancel.html', context)
     
     
+class StripeCancelPageView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return render(request, "account_connected_cancel.html")
  
+ 
+# Withdrawa views and other payment-related views would go here, but are not included in this snippet.
+
+class CreateStripeConnectAccountView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def post(self, request):
+        user = request.user
+        instructor = user.instructor   
+
+        try:
+           
+            if not instructor.stripe_account_id:
+                account = stripe.Account.create(
+                    type="express",
+                    country="US",  # 👉 change dynamically later
+                    email=user.email,
+                    capabilities={
+                        "transfers": {"requested": True},
+                        "card_payments": {"requested": True},
+                    },
+                )
+
+                instructor.stripe_account_id = account.id
+                instructor.save(update_fields=["stripe_account_id"])
+
+            else:
+                account = stripe.Account.retrieve(instructor.stripe_account_id)
+
+            refresh_url = request.build_absolute_uri(reverse("stripe-return-page"))
+            return_url = request.build_absolute_uri(reverse("stripe-cancel"))
+
+            account_link = stripe.AccountLink.create(
+                account=account.id,
+                refresh_url=refresh_url,
+                return_url=return_url,
+                type="account_onboarding",
+            )
+
+            details_submitted = getattr(account, "details_submitted", False)
+            if details_submitted and not instructor.stripe_onboarding_completed:
+                instructor.stripe_onboarding_completed = True
+                instructor.save(update_fields=["stripe_onboarding_completed"])
+
+            #  4. Response
+            return APIResponse.success(
+                message="Stripe onboarding link generated successfully",
+                data={
+                    "stripe_account_id": account.id,
+                    "onboarding_url": account_link.url,
+                    "charges_enabled": getattr(account, "charges_enabled", False),
+                    "payouts_enabled": getattr(account, "payouts_enabled", False),
+                    "details_submitted": details_submitted,
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+            
+            
+class StripeDashboardLoginLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        instructor = user.instructor
+
+        if not instructor.stripe_account_id:
+            return APIResponse.error(
+                message="Stripe account not connected.",
+                status_code=400
+            )
+
+        try:
+            login_link = stripe.Account.create_login_link(instructor.stripe_account_id)
+            return APIResponse.success(
+                message="Login link created successfully",
+                data={"url": login_link.url}
+            )
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+            
+            
+            
+class WithdrawRequestView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+
+        amount = request.data.get("amount")
+        withdraw_method = request.data.get("withdraw_method", "unknown")
+
+        if not amount:
+            return APIResponse.error("Amount is required", 400)
+
+        try:
+            amount = Decimal(str(amount))
+        except:
+            return APIResponse.error("Invalid amount", 400)
+
+        if amount <= 0:
+            return APIResponse.error("Amount must be greater than 0", 400)
+
+        # ✅ Total earnings (from commission)
+        total_earnings = Commission.objects.filter(
+            user=user
+        ).aggregate(total=Sum("commission_amount"))["total"] or Decimal("0.00")
+
+        # ✅ Already withdrawn
+        withdrawn_amount = Withdrawal.objects.filter(
+            user=user,
+            status__in=["pending", "completed"]
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+        available_balance = total_earnings - withdrawn_amount
+
+        if amount > available_balance:
+            return APIResponse.error(
+                f"Insufficient balance. Available: {available_balance}", 400
+            )
+
+        # ✅ Stripe account check
+        instructor = user.instructor
+        if not instructor.stripe_account_id:
+            return APIResponse.error("Stripe account not connected", 400)
+
+        try:
+            account = stripe.Account.retrieve(instructor.stripe_account_id)
+        except Exception:
+            return APIResponse.error("Stripe account error", 400)
+
+        if not account.payouts_enabled:
+            return APIResponse.error("Stripe payouts not enabled", 400)
+
+        # ✅ Retrieve Bank / Card details automatically from Stripe
+        bank_name = request.data.get("bank_name", "")
+        bank_last4 = ""
+
+        external_accounts = getattr(account, "external_accounts", None)
+        if external_accounts and getattr(external_accounts, "data", []):
+            default_acc = external_accounts.data[0]
+            acc_object = getattr(default_acc, "object", "")
+            
+            if acc_object == "bank_account":
+                bank_name = getattr(default_acc, "bank_name", bank_name)
+                bank_last4 = getattr(default_acc, "last4", "")
+            elif acc_object == "card":
+                brand = getattr(default_acc, "brand", "Card")
+                bank_name = f"{brand} Card"
+                bank_last4 = getattr(default_acc, "last4", "")
+
+        # ✅ Create withdrawal
+        withdrawal = Withdrawal.objects.create(
+            user=user,
+            amount=amount,
+            bank_name=bank_name,
+            bank_last4=bank_last4,
+            previous_balance=available_balance,
+            current_balance=available_balance - amount,
+            withdraw_method=withdraw_method,
+            status="pending",
+        )
+
+        return APIResponse.success(
+            message="Withdraw request submitted",
+            data={
+                "withdraw_id": withdrawal.withdraw_id,
+                "amount": str(withdrawal.amount),
+                "status": withdrawal.status,
+            }
+        )
+
+
+
+
+
+class ApproveWithdrawView(APIView):
+    permission_classes = [IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, withdraw_id):
+        status_value = request.data.get("status")
+
+        if not withdraw_id:
+            return APIResponse.error(
+                message="withdraw_id is required.",
+                status_code=400
+            )
+
+        if not status_value:
+            return APIResponse.error(
+                message="status is required.",
+                status_code=400
+            )
+
+        status_value = status_value.lower()
+
+        if status_value not in ["completed", "cancelled"]:
+            return APIResponse.error(
+                message="Invalid status. Use 'completed' or 'cancelled'.",
+                status_code=400
+            )
+
+        withdrawal = get_object_or_404(Withdrawal, withdraw_id=withdraw_id)
+
+        if withdrawal.status != "pending":
+            return APIResponse.error(
+                message="This withdrawal has already been processed.",
+                status_code=400
+            )
+
+        instructor = withdrawal.user.instructor
+
+        # cancel flow
+        if status_value == "cancelled":
+            withdrawal.status = "cancelled"
+            withdrawal.failure_reason = request.data.get("failure_reason", "Cancelled by admin.")
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+            return APIResponse.success(
+                message="Withdrawal cancelled successfully.",
+                data={
+                    "withdraw_id": withdrawal.withdraw_id,
+                    "status": withdrawal.status,
+                    "failure_reason": withdrawal.failure_reason,
+                },
+                status_code=200
+            )
+
+        # completed flow
+        try:
+            transfer = stripe.Transfer.create(
+                amount=int(withdrawal.amount * 100),
+                currency="usd",
+                destination=instructor.stripe_account_id
+            )
+
+            withdrawal.status = "completed"
+            withdrawal.stripe_transfer_id = transfer.id
+            withdrawal.failure_reason = None
+            withdrawal.save(update_fields=[
+                "status",
+                "stripe_transfer_id",
+                "failure_reason",
+                "updated_at"
+            ])
+
+            return APIResponse.success(
+                message="Withdrawal approved and paid successfully.",
+                data={
+                    "withdraw_id": withdrawal.withdraw_id,
+                    "status": withdrawal.status,
+                    "transfer_id": transfer.id
+                },
+                status_code=200
+            )
+
+        except Exception as e:
+            withdrawal.status = "cancelled"
+            withdrawal.failure_reason = str(e)
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+            return APIResponse.error(
+                message="Transfer failed.",
+                errors={"stripe_error": str(e)},
+                status_code=400
+            )

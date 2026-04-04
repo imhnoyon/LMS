@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stripe Connection Cancelled</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #fff7ed, #f8fafc);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .cancel-card {
+            width: 100%;
+            max-width: 520px;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 40px 30px;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cancel-card::before {
+            content: "";
+            position: absolute;
+            top: -120px;
+            right: -120px;
+            width: 220px;
+            height: 220px;
+            background: rgba(249, 115, 22, 0.08);
+            border-radius: 50%;
+        }
+
+        .cancel-card::after {
+            content: "";
+            position: absolute;
+            bottom: -100px;
+            left: -100px;
+            width: 180px;
+            height: 180px;
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: 50%;
+        }
+
+        .icon-wrapper {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f97316, #ef4444);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 12px 30px rgba(239, 68, 68, 0.25);
+        }
+
+        .cancel-icon {
+            color: #fff;
+            font-size: 38px;
+            font-weight: bold;
+        }
+
+        .title {
+            font-size: 30px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #64748b;
+            margin-bottom: 28px;
+        }
+
+        .info-box {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 28px;
+            text-align: left;
+        }
+
+        .info-box p {
+            font-size: 14px;
+            color: #7c2d12;
+            margin-bottom: 10px;
+        }
+
+        .info-box p:last-child {
+            margin-bottom: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #ffedd5;
+            color: #c2410c;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: 999px;
+            margin-bottom: 22px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            text-decoration: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.25s ease;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #f97316;
+            color: #fff;
+            box-shadow: 0 10px 25px rgba(249, 115, 22, 0.25);
+        }
+
+        .btn-primary:hover {
+            background: #ea580c;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+        }
+
+        .footer-text {
+            margin-top: 24px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        @media (max-width: 576px) {
+            .cancel-card {
+                padding: 30px 20px;
+            }
+
+            .title {
+                font-size: 24px;
+            }
+
+            .subtitle {
+                font-size: 15px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cancel-card">
+        <div class="icon-wrapper">
+            <div class="cancel-icon">!</div>
+        </div>
+
+        <div class="badge">Stripe Setup Incomplete</div>
+
+        <h1 class="title">Connection Was Not Completed</h1>
+
+        <p class="subtitle">
+            Your Stripe account setup was cancelled or not completed. You can resume onboarding
+            anytime to enable payouts and receive your earnings without interruption.
+        </p>
+
+        <div class="info-box">
+            <p><strong>Status:</strong> Not Connected</p>
+            <p><strong>Payouts:</strong> Unavailable until onboarding is completed</p>
+            <p><strong>Next Step:</strong> Retry Stripe onboarding from your dashboard</p>
+        </div>
+
+        <div class="button-group">
+            <a href="/dashboard/" class="btn btn-primary">Try Again</a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+
+        <p class="footer-text">
+            Need help? Contact support if you faced any issue while connecting your Stripe account.
+        </p>
+    </div>
+</body>
+</html>
