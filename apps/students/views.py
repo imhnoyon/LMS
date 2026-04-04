@@ -219,7 +219,6 @@ class StudentProfileUpdateView(APIView):
     permission_classes = [IsAuthenticated, IsStudent]
 
     def get(self, request):
-        # Auto-create profile if missing to prevent "No Student matches" error
         student, _ = Student.objects.get_or_create(user=request.user)
 
         serializer = StudentProfileSerializer(

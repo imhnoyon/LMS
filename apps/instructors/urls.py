@@ -11,4 +11,8 @@ urlpatterns = [
     
     # course list seen by instructor approve or not
     path("courses/", CourseListView.as_view(), name="course-list"),
+    
+    # instructor profile
+    path("profile/", InstructorProfileUpdateView.as_view(), name="instructor-profile"),
+    path("dashboard/", InstructorDashboardView.as_view(), name="instructor-dashboard"),
 ]

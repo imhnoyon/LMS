@@ -177,42 +177,7 @@ class Lecture(models.Model):
     def __str__(self):
         return self.name
 
-# I don't use this model because all fields are used in lecture model
-class LectureVideo(models.Model):
-    lecture    = models.OneToOneField(Lecture, on_delete=models.CASCADE, related_name='video')
-    video_file = models.FileField(upload_to='lectures/videos/')
-    duration   = models.DurationField(null=True, blank=True)
 
-    def __str__(self):
-        return f"Video - {self.lecture.name}"
-
-
-class LectureAttachment(models.Model):
-    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='attachments')
-    file    = models.FileField(upload_to='lectures/attachments/')
-    name    = models.CharField(max_length=255, blank=True)
-
-    def __str__(self):
-        return f"Attachment - {self.lecture.name}"
-
-
-class LectureCaption(models.Model):
-    lecture  = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='captions')
-    language = models.CharField(max_length=50)
-    file     = models.FileField(upload_to='lectures/captions/')
-
-    def __str__(self):
-        return f"Caption ({self.language}) - {self.lecture.name}"
-
-
-class LectureNoteFile(models.Model):
-    lecture = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='note_files')
-    file    = models.FileField(upload_to='lectures/notes/')
-    name    = models.CharField(max_length=255, blank=True)
-
-    def __str__(self):
-        return f"Note File - {self.lecture.name}"
-# I don't use this model because all fields are used in lecture model ended here
 
 
 

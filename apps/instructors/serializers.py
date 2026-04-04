@@ -1,8 +1,7 @@
-from time import timezone
-
 from rest_framework import serializers
 from apps.instructors.models import Instructor
 from apps.organizations.models import Invitation, Membership
+from apps.students.models import Student
 from apps.users.models import User
 
 class InstructorRegisterSerializer(serializers.ModelSerializer):
@@ -90,8 +89,82 @@ class ApproveInstructorSerializer(serializers.ModelSerializer):
     
     
 # course course
-from apps.courses.models import Course
+from apps.courses.models import Course      
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
-        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price', 'discount_price', 'coupon_code', 'expiry_type', 'status', 'created_at']
+        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price', 'discount_price','rating', 'coupon_code', 'expiry_type', 'status', 'created_at']
+        
+        
+        
+        
+class UserBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'phone', 'avatar']
+        read_only_fields = ['id', 'email']
+
+class InstructorProfileSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer()
+
+    class Meta:
+        model = Instructor
+        fields = ['id', 'title', 'biography','website', 'twitter', 'linkedin', 'youtube', 'user']
+        read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if user_data:
+            user = instance.user
+            for attr, value in user_data.items():
+                setattr(user, attr, value)
+            user.save()
+
+        return instance
+    
+    
+    
+    
+    
+class RecentActivitySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    student_name = serializers.CharField()
+    course_title = serializers.CharField()
+    message = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class RevenueChartSerializer(serializers.Serializer):
+    label = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class CourseOverviewChartSerializer(serializers.Serializer):
+    label = serializers.CharField()
+    enrollments = serializers.IntegerField()
+    completions = serializers.IntegerField()
+
+
+class RatingBreakdownSerializer(serializers.Serializer):
+    stars = serializers.IntegerField()
+    count = serializers.IntegerField()
+    percentage = serializers.FloatField()
+
+
+class InstructorDashboardSerializer(serializers.Serializer):
+    course_created = serializers.IntegerField()
+    active_courses = serializers.IntegerField()
+    students_enrolled = serializers.IntegerField()
+    online_students = serializers.IntegerField()
+    online_courses = serializers.IntegerField()
+    total_earning = serializers.DecimalField(max_digits=12, decimal_places=2)
+    average_rating = serializers.FloatField()
+    recent_activity = RecentActivitySerializer(many=True)
+    monthly_revenue_chart = RevenueChartSerializer(many=True)
+    rating_breakdown = RatingBreakdownSerializer(many=True)
+    course_overview_chart = CourseOverviewChartSerializer(many=True)

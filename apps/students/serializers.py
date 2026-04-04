@@ -43,17 +43,36 @@ class LearnerRegisterSerializer(serializers.ModelSerializer):
 
 
 
-class StudentProfileSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(read_only=True)
-    username = serializers.CharField(read_only=True)
-    
+from apps.students.models import Student
+
+class UserBasicSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = [
-            'id', 'username', 'email', 'name', 'phone', 
-            'biography', 'avatar', 'user_type', 'is_active'
-        ]
-        read_only_fields = ['id', 'username', 'email', 'user_type', 'is_active']
+        fields = ['id', 'name', 'email', 'phone', 'avatar']
+        read_only_fields = ['id', 'email']
+
+class StudentProfileSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer()
+
+    class Meta:
+        model = Student
+        fields = ['id', 'title', 'date_of_birth', 'gender', 'bio', 'user']
+        read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if user_data:
+            user = instance.user
+            for attr, value in user_data.items():
+                setattr(user, attr, value)
+            user.save()
+
+        return instance
 
 
 class StudentDashboardSerializer(serializers.Serializer):

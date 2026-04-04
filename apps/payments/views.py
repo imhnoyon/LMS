@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from apps.enrollments.models import Enrollment
-from apps.payments.models import Invoice, Withdrawal
+from apps.payments.models import Invoice, Withdrawal, Commission
 from django.shortcuts import render
 from django.views import View
 from datetime import date
@@ -196,6 +196,7 @@ class StripeWebhookView(APIView):
         self._mark_order_paid(payment.order)
         self._create_enrollments(payment)
         self._create_invoice(payment)
+        self._create_course_commissions(payment)
 
     @transaction.atomic
     def handle_checkout_expired(self, session):
@@ -296,6 +297,39 @@ class StripeWebhookView(APIView):
             status="paid",
             invoice_date=date.today(),
         )
+    
+   
+
+    def _create_course_commissions(self, payment):
+        instructor_rate = Decimal(str(settings.INSTRUCTOR_RATE))
+        platform_rate = Decimal(str(settings.PLATFORM_RATE))
+
+        order_items = payment.order.items.select_related(
+            "course", "course__instructor"
+        ).all()
+
+        for item in order_items:
+            course = item.course
+            instructor = getattr(course, "instructor", None)
+
+            if not course or not instructor:
+                continue
+
+            item_total = Decimal(str(getattr(item, "paid_price", None) or item.price))
+
+            instructor_amount = (item_total * instructor_rate).quantize(Decimal("0.01"))
+            platform_amount = (item_total * platform_rate).quantize(Decimal("0.01"))
+
+            Commission.objects.get_or_create(
+                user=instructor,
+                course=course,
+                defaults={
+                    "payment_method": payment.payment_method or "Stripe",
+                    "order_amount": item_total,
+                    "commission_amount": instructor_amount,
+                }
+            )
+        
 
     def handle_payment_intent_succeeded(self, payment_intent):
         pass

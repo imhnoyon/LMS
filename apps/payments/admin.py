@@ -35,3 +35,9 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_display = ('name','invoice_id','payment_method', 'amount','currency', 'status','invoice_date', 'created_at')
     list_filter  = ('status', 'created_at')
     search_fields = ('user__full_name',)
+
+@admin.register(Commission)
+class CommissionAdmin(admin.ModelAdmin):
+    list_display = ('user_name', 'course', 'order_amount', 'commission_amount', 'payment_method', 'created_at')
+    list_filter = ('payment_method', 'created_at')
+    search_fields = ('user__name', 'course__title')

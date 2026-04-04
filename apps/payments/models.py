@@ -284,6 +284,27 @@ class Invoice(models.Model):
 
 
 
+class Commission(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="commissions")
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name="commissions")
+    payment_method = models.CharField(max_length=100, default="Stripe")
+    order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def user_name(self):
+        if self.user:
+            return self.user.name
+        return None
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user"]),
+        ]
+        
+    def __str__(self):
+        return f"Commission for {self.user.name} - Order: {self.order_amount}, Commission: {self.commission_amount}"
 
 
 
