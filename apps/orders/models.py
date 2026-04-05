@@ -54,6 +54,7 @@ class CartItems(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')
     course = models.ForeignKey('courses.Course', on_delete=models.CASCADE, null=True, blank=True, related_name='cart_products')
     course_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    referral_code = models.CharField(max_length=50, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -116,6 +117,7 @@ class OrderItem(models.Model):
     course         = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="order_items")
     original_price = models.DecimalField(max_digits=10, decimal_places=2)
     paid_price     = models.DecimalField(max_digits=10, decimal_places=2)
+    referral_code  = models.CharField(max_length=50, null=True, blank=True)
     created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:

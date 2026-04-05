@@ -6,7 +6,8 @@ from django.db import models
 import string
 import random
 import uuid
-
+from django.utils.text import slugify
+from apps.notifications.models import User
 from utils.api_response import APIResponse
 
 
@@ -58,7 +59,7 @@ class Affiliate(models.Model):
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
 
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.10)
 
     total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -94,4 +95,35 @@ class AffiliateCommission(models.Model):
     def __str__(self):
         return f"{self.affiliate.user.email} - {self.commission_rate}"
     
+    
+    
+# Affiliate Course Link Model
+class AffiliateCourseLink(models.Model):
+    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="course_links")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="affiliate_links")
+
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    referral_url = models.URLField(blank=True, null=True)
+
+    clicks = models.PositiveIntegerField(default=0)
+    unique_clicks = models.PositiveIntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("affiliate", "course")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.affiliate.user.name} -> {self.course.title}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            base = slugify(self.course.title)[:20]
+            self.code = f"{self.affiliate.id}-{base}-{uuid.uuid4().hex[:6].upper()}"
+        super().save(*args, **kwargs)
+ 
+ 
+ 
  

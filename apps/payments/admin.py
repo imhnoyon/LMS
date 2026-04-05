@@ -35,3 +35,17 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_display = ('name','invoice_id','payment_method', 'amount','currency', 'status','invoice_date', 'created_at')
     list_filter  = ('status', 'created_at')
     search_fields = ('user__full_name',)
+
+@admin.register(Commission)
+class CommissionAdmin(admin.ModelAdmin):
+    list_display = ('user_name', 'course', 'order_amount', 'commission_amount', 'payment_method', 'created_at')
+    list_filter = ('payment_method', 'created_at')
+    search_fields = ('user__name', 'course__title')
+    
+    
+    
+@admin.register(Withdrawal)
+class WithdrawalAdmin(admin.ModelAdmin):
+    list_display = ('user_name','previous_balance','current_balance','withdraw_id','bank_name', 'amount', 'status', 'requested_at')
+    list_filter = ('status', 'requested_at')
+    search_fields = ('user__name',)

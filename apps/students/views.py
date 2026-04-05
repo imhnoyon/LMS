@@ -3,16 +3,17 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from utils.api_response import APIResponse
-from apps.courses.models import (
-    Course, Section, Lecture, LecturesProgress, 
-    Quiz, QuizAttempt, Question, QuestionOption
-)
+from apps.courses.models import *
 from apps.payments.models import Invoice
-from apps.enrollments.models import Enrollment
-from .serializers import (
-    StudentDashboardSerializer, SectionPlayerSerializer, StudentQuizQuestionSerializer
-)
+from apps.enrollments.models import Enrollment, Certificate
+from .serializers import *
 from .helper_funtion import is_lecture_accessible, get_next_lecture, is_quiz_passed
+from .models import Student
+from rest_framework import status
+from rest_framework.generics import get_object_or_404
+from utils.permissions import IsStudent
+from utils.paginations import CustomPagination
+from django.db.models import Q
 
 # 🔹 Dashboard Summary
 class StudentDashboardView(APIView):
@@ -24,13 +25,15 @@ class StudentDashboardView(APIView):
         enrollments = Enrollment.objects.filter(user=user)
 
         enrolled_courses_count = enrollments.count()
-        active_courses_count = enrollments.filter(is_active=True, is_completed=False).count()
+        active_courses_count = enrollments.filter(is_started=True).count()
         completed_courses_count = enrollments.filter(is_completed=True).count()
         recently_enrolled = [
             enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:4]
         ]
 
         recent_invoices = Invoice.objects.filter(user=user).order_by("-invoice_date", "-created_at")[:10]
+        recent_quizes = QuizAttempt.objects.filter(user=user).order_by( "-submitted_at")[:10]
+        
 
         data = {
             "enrolled_courses_count": enrolled_courses_count,
@@ -38,6 +41,7 @@ class StudentDashboardView(APIView):
             "completed_courses_count": completed_courses_count,
             "recently_enrolled": recently_enrolled,
             "recent_invoices": recent_invoices,
+            "recent_quizes": recent_quizes
         }
 
         serializer = StudentDashboardSerializer(instance=data, context={"request": request})
@@ -55,10 +59,20 @@ class CoursePlayerView(APIView):
 
     def get(self, request, course_id, lecture_id=None):
         course = get_object_or_404(Course, id=course_id)
+        enrollment = Enrollment.objects.filter(
+            user=request.user,
+            course=course
+        ).first()
         
         # Check if student is actually enrolled
         if not Enrollment.objects.filter(user=request.user, course=course).exists():
             return APIResponse.error(message="You are not enrolled in this course.", status_code=403)
+        
+        
+        # First time course open করলে started true হবে
+        if not enrollment.is_started:
+            enrollment.is_started = True
+            enrollment.save(update_fields=["is_started"])
 
         sections = course.sections.prefetch_related("lectures", "quizzes").all()
         current_lecture = None
@@ -116,6 +130,49 @@ class CompleteLectureView(APIView):
         progress.save()
         return APIResponse.success(message="Lecture marked as completed.")
 
+
+class CheckCourseCompletionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        course = get_object_or_404(Course, id=course_id)
+        
+        # 🔹 Check if all lectures are completed
+        total_lectures = Lecture.objects.filter(section__course=course).count()
+        completed_count = LecturesProgress.objects.filter(
+            user=request.user, 
+            course=course, 
+            is_completed=True
+        ).count()
+
+        if total_lectures > 0 and completed_count >= total_lectures:
+            enrollment, _ = Enrollment.objects.get_or_create(user=request.user, course=course)
+            
+            # If not already completed, mark it and generate certificate
+            if not enrollment.is_completed:
+                enrollment.is_completed = True
+                enrollment.save(update_fields=["is_completed"])
+            
+            # Ensure certificate exists
+            certificate, created = Certificate.objects.get_or_create(
+                enrollment=enrollment,
+                defaults={'course_title': course.title}
+            )
+            
+            return APIResponse.success(
+                message="Course completed! Certificate generated." if created else "Course already completed.",
+                data={
+                    "certificate_generated": True,
+                    "certificate_id": str(certificate.certificate_id),
+                    "is_completed": True
+                }
+            )
+        
+        return APIResponse.success(
+            message="Course not yet completed.",
+            data={"certificate_generated": False}
+        )
+
 # 🔹 Quiz taking and submission
 class StudentQuizView(APIView):
     permission_classes = [IsAuthenticated]
@@ -155,3 +212,417 @@ class QuizSubmissionView(APIView):
         return APIResponse.success(data={
             "score": score_pct, "passed": score_pct >= quiz.passing_score
         })
+
+
+
+class StudentProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        student, _ = Student.objects.get_or_create(user=request.user)
+
+        serializer = StudentProfileSerializer(
+            student,
+            context={"request": request}
+        )
+        return APIResponse.success(
+            message="Student profile retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def patch(self, request):
+        student, _ = Student.objects.get_or_create(user=request.user)
+
+        serializer = StudentProfileSerializer(
+            student,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Student profile updated successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.error(
+            message="Failed to update student profile.",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# Enroll course list views
+class EnrollCourseAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(user=request.user)
+
+        # Filters
+        is_active = request.query_params.get("is_active")
+        is_completed = request.query_params.get("is_completed")
+        is_started = request.query_params.get("is_started")
+
+        if is_active is not None:
+            enrollments = enrollments.filter(is_active=is_active.lower() == "true")
+
+        if is_completed is not None:
+            enrollments = enrollments.filter(is_completed=is_completed.lower() == "true")
+
+        if is_started is not None:
+            enrollments = enrollments.filter(is_started=is_started.lower() == "true")
+
+        enrollments = enrollments.order_by("-id")
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+        serializer = EnrollCourseSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Enrolled courses retrieved successfully."
+        )
+
+    
+        
+        
+class ExamAssessmentAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(user=request.user)
+
+        # Filters
+        is_active = request.query_params.get("is_active")
+        is_completed = request.query_params.get("is_completed")
+        is_started = request.query_params.get("is_started")
+
+        if is_active is not None:
+            enrollments = enrollments.filter(is_active=is_active.lower() == "true")
+
+        if is_completed is not None:
+            enrollments = enrollments.filter(is_completed=is_completed.lower() == "true")
+
+        if is_started is not None:
+            enrollments = enrollments.filter(is_started=is_started.lower() == "true")
+
+        enrollments = enrollments.order_by("-id")
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+        serializer = ExamAssessmentSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Exam assessment courses retrieved successfully."
+        )
+
+    
+# Course Review APIView
+class CreateReviewView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def post(self, request, course_id):
+        course = get_object_or_404(Course, id=course_id)
+
+        if not Enrollment.objects.filter(course=course,user=request.user,is_active=True).exists():
+            return APIResponse.error(
+                message="You must enroll in this course to submit a review.",
+                status_code=403
+            )
+        if Review.objects.filter(course=course, user=request.user).exists():
+            return APIResponse.error(
+                message="You have already reviewed this course.",
+                status_code=400
+            )
+            
+        
+
+        serializer = ReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(course=course, user=request.user)
+
+            return APIResponse.success(
+                message="Review submitted successfully.",
+                data=serializer.data,
+                status_code=201
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+    def patch(self, request, review_id):
+        review = get_object_or_404(Review, id=review_id)
+
+        if review.user != request.user:
+            return APIResponse.error(
+                message="You are not allowed to update this review.",
+                status_code=403
+            )
+
+        serializer = ReviewSerializer(review, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+
+            return APIResponse.success(
+                message="Review updated successfully.",
+                data=serializer.data,
+                status_code=200
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+        
+    def delete(self, request, review_id):
+        review = get_object_or_404(Review, id=review_id)
+        if review.user != request.user:
+            return APIResponse.error(
+                message="You are not allowed to delete this review.",
+                status_code=403
+            )
+        review.delete()
+        return APIResponse.success(
+            message="Review deleted successfully.",
+            status_code=204
+        )
+        
+        
+ # Review List       
+class ReviewListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        reviews = Review.objects.filter(user=request.user).order_by('-created_at')
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(reviews, request, view=self)
+        serializer = ReviewListSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Reviews retrieved successfully."
+        )
+        
+        
+# Course Quiz Attempt list      
+class CourseQuizAttemptListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        attempts = QuizAttempt.objects.filter(
+            user=request.user
+        ).select_related(
+            "user",
+            "course",
+            "quiz",
+        ).order_by("-submitted_at")
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(attempts, request, view=self)
+        serializer = CourseQuizAttemptSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Quiz attempts retrieved successfully."
+        )      
+        
+        
+         
+# Course Purchase History      
+class CoursePurchaseHistoryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        enrollments = Enrollment.objects.filter(
+            user=request.user
+        ).select_related(
+            "course",
+            "course__instructor",
+            "course__advance_info"
+        ).order_by("-enrolled_at")
+
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(enrollments, request, view=self)
+
+        serializer = CoursePurchasesHistory(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Course purchase history retrieved successfully."
+        )
+    
+
+# Change Password api
+class ChangePasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated,]
+
+    def patch(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+
+        user = request.user
+        old_password = serializer.validated_data["old_password"]
+        new_password = serializer.validated_data["new_password"]
+
+        if not user.check_password(old_password):
+            return APIResponse.error(
+                message="Old password is incorrect.",
+                status_code=400
+            )
+
+        if old_password == new_password:
+            return APIResponse.error(
+                message="New password must be different from old password.",
+                status_code=400
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        return APIResponse.success(
+            message="Password changed successfully.",
+            status_code=200
+        )
+        
+        
+# Delete Account
+class DeleteAccountAPIView(APIView):
+    permission_classes = [IsAuthenticated,IsStudent]
+
+    def delete(self, request):
+        serializer = DeleteAccountSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Validation failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+        user = request.user
+        password = serializer.validated_data["password"]
+        if not user.check_password(password):
+            return APIResponse.error(
+                message="Password is incorrect.",
+                status_code=400
+            )
+        user.delete()
+        return APIResponse.success(
+            message="Account deleted successfully.",
+            status_code=200
+        )
+        
+        
+# Live course
+class StudentLiveClassListView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        today = timezone.localdate()
+        now_time = timezone.localtime().time()
+
+        enrolled_course_ids = Enrollment.objects.filter(
+            user=request.user,
+            is_active=True
+        ).values_list("course_id", flat=True)
+
+        base_queryset = LiveClass.objects.filter(
+            course_id__in=enrolled_course_ids
+        ).select_related("instructor", "course")
+
+        upcoming_live_classes = base_queryset.filter(
+            Q(scheduled_date__gt=today) |
+            Q(scheduled_date=today, scheduled_time__gte=now_time)
+        ).order_by("scheduled_date", "scheduled_time")
+
+        past_live_classes = base_queryset.filter(
+            Q(scheduled_date__lt=today) |
+            Q(scheduled_date=today, scheduled_time__lt=now_time)
+        ).order_by("-scheduled_date", "-scheduled_time")
+
+        upcoming_serializer = LiveClassStudentSerializer(upcoming_live_classes, many=True, context={"request": request})
+        past_serializer = LiveClassStudentSerializer(past_live_classes, many=True, context={"request": request})
+
+        return APIResponse.success(
+            message="Live classes fetched successfully.",
+            data={
+                "upcoming_live_classes": upcoming_serializer.data,
+                "past_live_classes": past_serializer.data,
+            },
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+        
+        
+#join live classes 
+class JoinLiveClassView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def post(self, request, live_class_id):
+        live_class = get_object_or_404(LiveClass, pk=live_class_id)
+
+        # enrollment check
+        is_enrolled = Enrollment.objects.filter(
+            user=request.user,
+            course=live_class.course,
+            is_active=True
+        ).exists()
+
+        if not is_enrolled:
+            return APIResponse.error(
+                message="You are not enrolled in this course.",
+                status_code=403
+            )
+
+        attendance, created = LiveClassAttendance.objects.get_or_create(
+            live_class=live_class,
+            student=request.user,
+            defaults={
+                "status": "attended",
+                "joined_at": timezone.now()
+            }
+        )
+
+        if not created:
+            attendance.status = "attended"
+            attendance.joined_at = timezone.now()
+            attendance.save()
+
+        return APIResponse.success(
+            message="Joined live class successfully.",
+            data={
+                "class_link": live_class.class_link
+            }
+        )

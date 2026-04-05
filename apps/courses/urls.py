@@ -30,7 +30,9 @@ urlpatterns = [
     # Publish
     path('courses/publish/<int:pk>/', views.PublishCourseView.as_view()),
     
-    
+    # Live Classes
+    path('live-classes/stats/', views.InstructorLiveClassStatsView.as_view(), name='live-class-stats'),
+    path('live-classes/<int:course_id>/', views.LiveClassManageView.as_view(), name='live-class-manage'),
     
     
 ]

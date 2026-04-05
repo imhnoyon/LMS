@@ -12,6 +12,7 @@ from apps.affiliates.serializers import AffiliateRegisterSerializer
 from apps.users.serializers import *
 from utils.api_response import APIResponse
 from .models import OTP
+from apps.affiliates.models import AffiliateReferralClick
 from utils.emails import *
 from django.db.models import Q
 from utils.paginations import CustomPagination
@@ -39,6 +40,14 @@ class RegisterAPIView(APIView):
         if not serializer.is_valid():
             return APIResponse.error(errors=serializer.errors,status_code=status.HTTP_400_BAD_REQUEST)
         user = serializer.save()
+        
+        # 🔗 Auto-associate existing Affiliate Clicks to this new User
+        ip_address = request.META.get('REMOTE_ADDR')
+        AffiliateReferralClick.objects.filter(
+            ip_address=ip_address,
+            clicked_by__isnull=True,
+            is_converted=False
+        ).update(clicked_by=user)
         
         # For verification email
         code = generate_otp()
@@ -117,6 +126,14 @@ class SignInView(APIView):
         # last_login update
         update_last_login(None, user)
         tokens = generate_tokens(user)
+
+        # 🔗 Auto-associate existing Affiliate Clicks to this User on Login (IP Pairing)
+        ip_address = request.META.get('REMOTE_ADDR')
+        AffiliateReferralClick.objects.filter(
+            ip_address=ip_address,
+            clicked_by__isnull=True,
+            is_converted=False
+        ).update(clicked_by=user)
 
         return APIResponse.success(
             message="Login successful",

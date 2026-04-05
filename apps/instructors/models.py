@@ -38,6 +38,8 @@ class Instructor(models.Model):
     total_withdrawals = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
     is_approved = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
+    stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_onboarding_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
