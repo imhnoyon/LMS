@@ -107,3 +107,14 @@ class AffiliateStatusUpdateSerializer(serializers.ModelSerializer):
         if value not in valid_statuses:
             raise serializers.ValidationError("Invalid status selected.")
         return value
+    
+    
+    
+# Serializer for affiliate 
+class AffiliateCourseListSerializer(serializers.ModelSerializer):
+    course_thumbnail = serializers.ImageField(source="advance_info.thumbnail", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Course
+        fields = ["id", "title",'subtitle',  "category_name", "price",'discount_price', "course_thumbnail", "created_at"]

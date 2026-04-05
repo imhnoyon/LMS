@@ -1,9 +1,10 @@
-from rest_framework.views import APIView
+from rest_framework.views import APIView, settings
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.db.models import Q
+from apps.courses.models import Course
 
-from .models import Affiliate
-from .serializers import AffiliateListSerializer
+from .models import Affiliate, AffiliateCourseLink
+from .serializers import AffiliateCourseListSerializer, AffiliateListSerializer
 from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from .serializers import AffiliateStatusUpdateSerializer
@@ -92,4 +93,91 @@ class DeleteAffiliateView(APIView):
             message="Affiliate deleted successfully.",
             data={},
             status_code=status.HTTP_200_OK
+        )
+        
+        
+        
+
+
+# Affiliate course list view for affiliate users
+class AffiliateCourseListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        if request.user.role != "affiliate":
+            return APIResponse.error(
+                message="Only affiliate users can access this course list.",
+                status_code=403
+            )
+
+        search = request.query_params.get("search")
+        category = request.query_params.get("category")
+
+        courses = Course.objects.select_related("category", "advance_info").filter(
+            status="accepted"
+        ).order_by("-created_at")
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category_id=category)
+
+        paginator = self.paginator_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+
+        serializer = AffiliateCourseListSerializer(
+            paginated_courses,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)
+        
+        
+# Generate course referral link for affiliate users
+class GenerateAffiliateCourseLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        user = request.user
+
+        if user.role != "affiliate":
+            return APIResponse.error(
+                message="Only affiliate users can generate referral links.",
+                status_code=403
+            )
+
+        affiliate = get_object_or_404(Affiliate, user=user)
+        course = get_object_or_404(Course, id=course_id, status="accepted")
+
+        link, created = AffiliateCourseLink.objects.get_or_create(
+            affiliate=affiliate,
+            course=course
+        )
+
+        # Dynamically grab the frontend's exact URL (whether localhost or production)
+        base_frontend_url = request.headers.get("Origin")
+        if not base_frontend_url:
+            base_frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:8002")
+            
+        frontend_url = f"{base_frontend_url}/course/{course.id}?ref={link.code}"
+
+        if link.referral_url != frontend_url:
+            link.referral_url = frontend_url
+            link.save(update_fields=["referral_url"])
+
+        return APIResponse.success(
+            message="Affiliate course link generated successfully.",
+            data={
+                "course_id": course.id,
+                "course_title": course.title,
+                "referral_code": link.code,
+                "referral_url": link.referral_url
+            },
+            status_code=200
         )

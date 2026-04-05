@@ -6,7 +6,8 @@ from django.db import models
 import string
 import random
 import uuid
-
+from django.utils.text import slugify
+from apps.notifications.models import User
 from utils.api_response import APIResponse
 
 
@@ -94,4 +95,52 @@ class AffiliateCommission(models.Model):
     def __str__(self):
         return f"{self.affiliate.user.email} - {self.commission_rate}"
     
+    
+    
+# Affiliate Course Link Model
+class AffiliateCourseLink(models.Model):
+    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="course_links")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="affiliate_links")
+
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    referral_url = models.URLField(blank=True, null=True)
+
+    clicks = models.PositiveIntegerField(default=0)
+    unique_clicks = models.PositiveIntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("affiliate", "course")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.affiliate.user.name} -> {self.course.title}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            base = slugify(self.course.title)[:20]
+            self.code = f"{self.affiliate.id}-{base}-{uuid.uuid4().hex[:6].upper()}"
+        super().save(*args, **kwargs)
  
+ 
+ 
+ 
+class AffiliateReferralClick(models.Model):
+    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="referral_clicks")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="referral_clicks")
+    affiliate_link = models.ForeignKey(AffiliateCourseLink, on_delete=models.CASCADE, related_name="click_logs")
+
+    code = models.CharField(max_length=50, db_index=True)
+    session_key = models.CharField(max_length=100, blank=True, null=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True)
+
+    clicked_by = models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="affiliate_clicks")
+
+    is_converted = models.BooleanField(default=False)
+    clicked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-clicked_at"]
