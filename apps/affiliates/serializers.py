@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.db import transaction
 from apps.affiliates.models import *
 from apps.users.models import User
-
+from django.db.models import Sum
 
 class AffiliateRegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
@@ -118,3 +118,15 @@ class AffiliateCourseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ["id", "title",'subtitle',  "category_name", "price",'discount_price', "course_thumbnail", "created_at"]
+        
+        
+        
+        
+        
+
+        
+    
+    
+    
+        
+    

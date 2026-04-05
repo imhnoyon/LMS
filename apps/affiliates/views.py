@@ -205,6 +205,11 @@ class TrackReferralClickView(APIView):
         
         clicked_by = request.user if request.user.is_authenticated else None
         
+        already_clicked = AffiliateReferralClick.objects.filter(
+        affiliate_link=link,
+        session_key=session_key
+        ).exists()
+        
         # Log click
         AffiliateReferralClick.objects.create(
             affiliate=link.affiliate,
@@ -217,8 +222,13 @@ class TrackReferralClickView(APIView):
             clicked_by=clicked_by
         )
         
+        
+        
         # Increment click stats
         link.clicks += 1
-        link.save(update_fields=["clicks"])
+        if not already_clicked:
+            link.unique_clicks += 1
+
+        link.save(update_fields=["clicks", "unique_clicks"])
         
         return APIResponse.success("Click tracked.", status_code=200)
