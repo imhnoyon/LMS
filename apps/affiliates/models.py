@@ -59,7 +59,7 @@ class Affiliate(models.Model):
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
 
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.10)
 
     total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)

@@ -9,7 +9,8 @@ from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from .serializers import AffiliateStatusUpdateSerializer
 from rest_framework import status
-from django.shortcuts import get_object_or_404    
+from django.shortcuts import get_object_or_404
+from .models import AffiliateReferralClick
 
 
 class AffiliateListView(APIView):
@@ -181,3 +182,43 @@ class GenerateAffiliateCourseLinkView(APIView):
             },
             status_code=200
         )
+        
+        
+from rest_framework.permissions import AllowAny
+
+# Silently track a referral click whenever a user visits a link!
+class TrackReferralClickView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        referral_code = request.data.get("referral_code")
+        if not referral_code:
+            return APIResponse.error("Referral code is missing.", status_code=400)
+            
+        link = AffiliateCourseLink.objects.filter(code=referral_code).first()
+        if not link:
+            return APIResponse.error("Invalid referral code.", status_code=404)
+            
+        # Optional tracking details
+        ip_address = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        session_key = request.session.session_key if hasattr(request, "session") else None
+        
+        clicked_by = request.user if request.user.is_authenticated else None
+        
+        # Log click
+        AffiliateReferralClick.objects.create(
+            affiliate=link.affiliate,
+            course=link.course,
+            affiliate_link=link,
+            code=referral_code,
+            session_key=session_key,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            clicked_by=clicked_by
+        )
+        
+        # Increment click stats
+        link.clicks += 1
+        link.save(update_fields=["clicks"])
+        
+        return APIResponse.success("Click tracked.", status_code=200)

@@ -12,7 +12,7 @@ from utils.permissions import IsStudent
 
 
 class AddToCartView(APIView):
-    permission_classes = [IsAuthenticated, IsStudent]
+    # permission_classes = [IsAuthenticated, IsStudent]
     @transaction.atomic
     def post(self, request):
         serializer = AddToCartSerializer(data=request.data)
@@ -49,11 +49,14 @@ class AddToCartView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+        referral_code = request.data.get("referral_code")
+
         amount = course.price if getattr(course, "price", None) else course.price
         CartItems.objects.create(
             cart=cart,
             course=course,
-            course_amount=amount
+            course_amount=amount,
+            referral_code=referral_code
         )
 
         return APIResponse.success(
@@ -155,6 +158,9 @@ class CreateOrderFromCartView(APIView):
             coupon_code=coupon_code if coupon_code else None
         )
 
+        # 🔹 NEW logic: Capture referral code from request to apply it to order items
+        global_referral_code = (request.data.get("referral_code") or "").strip()
+
         # 🔹 Try to find a global coupon (Order-wide)
         global_coupon = None
         if coupon_code:
@@ -195,9 +201,13 @@ class CreateOrderFromCartView(APIView):
 
             if paid_price < 0: paid_price = 0
 
+            # Prioritize the code passed in the API request over the one already in the cart
+            final_referral_code = global_referral_code if global_referral_code else item.referral_code
+
             OrderItem.objects.create(
                 order=order, course=course,
-                original_price=original_price, paid_price=paid_price
+                original_price=original_price, paid_price=paid_price,
+                referral_code=final_referral_code
             )
 
             subtotal += original_price

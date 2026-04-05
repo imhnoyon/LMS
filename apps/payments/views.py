@@ -248,9 +248,13 @@ class StripeWebhookView(APIView):
             return "stripe"
 
     def _mark_payment_success(self, payment, session, payment_method):
+        payment_intent_id = getattr(session, "payment_intent", None)
+        if not payment_intent_id and isinstance(session, dict):
+            payment_intent_id = session.get("payment_intent")
+
         payment.status = "success"
         payment.transaction_id = session.id
-        payment.gateway_payment_id = session.payment_intent
+        payment.gateway_payment_id = payment_intent_id
         payment.payment_method = payment_method
         payment.paid_at = timezone.now()
         payment.save(update_fields=[
@@ -303,34 +307,78 @@ class StripeWebhookView(APIView):
    
 
     def _create_course_commissions(self, payment):
-        instructor_rate = Decimal(str(settings.INSTRUCTOR_RATE))
-        platform_rate = Decimal(str(settings.PLATFORM_RATE))
-
+        platform_fee_rate = settings.PLATFORM_FEE_RATE
+        
         order_items = payment.order.items.select_related(
             "course", "course__instructor"
         ).all()
 
         for item in order_items:
             course = item.course
-            instructor = getattr(course, "instructor", None)
+            instructor_user = getattr(course, "instructor", None)
 
-            if not course or not instructor:
+            if not course or not instructor_user:
                 continue
 
-            item_total = Decimal(str(getattr(item, "paid_price", None) or item.price))
+            item_total = Decimal(str(getattr(item, "paid_price", Decimal("0.00"))))
+            
+            # Phase 1: Always take 10% for the Platform
+            platform_amount = (item_total * platform_fee_rate).quantize(Decimal("0.01"))
+            remaining_for_payouts = item_total - platform_amount
 
-            instructor_amount = (item_total * instructor_rate).quantize(Decimal("0.01"))
-            platform_amount = (item_total * platform_rate).quantize(Decimal("0.01"))
+            # Phase 2: Check for Affiliate Commission
+            affiliate_amount = Decimal("0.00")
+            referral_code = getattr(item, "referral_code", None)
+            from apps.affiliates.models import AffiliateCourseLink, AffiliateCommission, AffiliateReferralClick
+            
+            active_click = None
+            if not referral_code:
+                active_click = AffiliateReferralClick.objects.filter(
+                    clicked_by=payment.user,
+                    course=course,
+                    is_converted=False
+                ).order_by("-clicked_at").first()
+                
+                if active_click:
+                    referral_code = active_click.code
 
-            Commission.objects.get_or_create(
-                user=instructor,
+            if referral_code:
+                link = AffiliateCourseLink.objects.filter(code=referral_code, course=course).first()
+                if link:
+                    affiliate = link.affiliate
+                   
+                    aff_comm_config = AffiliateCommission.objects.filter(affiliate=affiliate, product=course).first()
+                    aff_rate_raw = getattr(aff_comm_config, "commission_rate", affiliate.commission_rate)
+
+                    aff_multiplier = aff_rate_raw if aff_rate_raw < 1 else (aff_rate_raw / Decimal("100"))
+                    affiliate_amount = (item_total * aff_multiplier).quantize(Decimal("0.01"))
+
+         
+            final_instructor_amount = remaining_for_payouts - affiliate_amount
+            if final_instructor_amount < 0: final_instructor_amount = 0
+
+            # 💰 Record Instructor Commission (Using .create to allow multiple sales of same course)
+            Commission.objects.create(
+                user=instructor_user,
                 course=course,
-                defaults={
-                    "payment_method": payment.payment_method or "Stripe",
-                    "order_amount": item_total,
-                    "commission_amount": instructor_amount,
-                }
+                payment_method=payment.payment_method or "Stripe",
+                order_amount=item_total,
+                commission_amount=final_instructor_amount,
             )
+
+            # 💰 Record Affiliate payout if exists
+            if affiliate_amount > 0:
+                affiliate.total_earned += affiliate_amount
+                affiliate.save(update_fields=["total_earned"])
+                if active_click:
+                    active_click.is_converted = True
+                    active_click.save(update_fields=["is_converted"])
+                    
+                AffiliateCommission.objects.create(
+                    affiliate=affiliate,
+                    product=course,  
+                    commission_rate=affiliate_amount, 
+                )
         
 
     def handle_payment_intent_succeeded(self, payment_intent):

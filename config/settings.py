@@ -266,6 +266,6 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 
 
-# Commission rates
-INSTRUCTOR_RATE = 0.90
-PLATFORM_RATE = 0.10
+# Commission rates (multipliers)
+from decimal import Decimal
+PLATFORM_FEE_RATE = Decimal("0.10")
