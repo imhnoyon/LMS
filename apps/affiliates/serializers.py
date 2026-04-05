@@ -2,6 +2,7 @@ import django
 from rest_framework import serializers
 from django.db import transaction
 from apps.affiliates.models import *
+from apps.payments.models import Commission
 from apps.users.models import User
 from django.db.models import Sum
 
@@ -122,6 +123,8 @@ class AffiliateCourseListSerializer(serializers.ModelSerializer):
         
         
         
+
+
         
 
         

@@ -232,3 +232,4 @@ class TrackReferralClickView(APIView):
         link.save(update_fields=["clicks", "unique_clicks"])
         
         return APIResponse.success("Click tracked.", status_code=200)
+

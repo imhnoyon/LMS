@@ -127,20 +127,3 @@ class AffiliateCourseLink(models.Model):
  
  
  
-class AffiliateReferralClick(models.Model):
-    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="referral_clicks")
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="referral_clicks")
-    affiliate_link = models.ForeignKey(AffiliateCourseLink, on_delete=models.CASCADE, related_name="click_logs")
-
-    code = models.CharField(max_length=50, db_index=True)
-    session_key = models.CharField(max_length=100, blank=True, null=True)
-    ip_address = models.GenericIPAddressField(blank=True, null=True)
-    user_agent = models.TextField(blank=True, null=True)
-
-    clicked_by = models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="affiliate_clicks")
-
-    is_converted = models.BooleanField(default=False)
-    clicked_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-clicked_at"]
