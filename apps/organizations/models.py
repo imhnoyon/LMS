@@ -183,6 +183,7 @@ class Invitation(models.Model):
     expires_at = models.DateTimeField(default=default_expiry)
 
     class Meta:
+        ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["organization", "email"],

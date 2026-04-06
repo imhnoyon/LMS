@@ -49,7 +49,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = [
         ("owner", "Platform Owner"),
-        ("admin", "Admin"),
+        ("Or_admin", "Or_Admin"),
         ("manager", "Manager"),
         ("reviewer", "Reviewer"),
         ("finance", "Finance"),

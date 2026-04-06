@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Organization Invitation</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #007bff;">You're Invited to Join {{ organization_name }}!</h2>
+        
+        <p>Hello,</p>
+        <p>You have been invited to join <strong>{{ organization_name }}</strong> as an Instructor on Learn Hub.</p>
+        
+        {% if is_registered %}
+        <p>Since you already have a Learn Hub account, you can click the button below to accept or reject the invitation:</p>
+        <a href="{{ invitation_link }}" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: #fff; text-decoration: none; border-radius: 5px;">View Invitation</a>
+        {% else %}
+        <p>It looks like you don't have a Learn Hub account yet. Please register using the link below to join the organization:</p>
+        <a href="{{ invitation_link }}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: #fff; text-decoration: none; border-radius: 5px;">Register & Join</a>
+        {% endif %}
+        
+        <p style="margin-top: 20px;">Or copy and paste this link into your browser:</p>
+        <p><a href="{{ invitation_link }}">{{ invitation_link }}</a></p>
+        
+        <p>This invitation will expire in 7 days.</p>
+        
+        <hr style="border: 0; border-top: 1px solid #ddd;">
+        <p style="font-size: 12px; color: #777;">If you weren't expecting this invitation, you can safely ignore this email.</p>
+    </div>
+</body>
+</html>
