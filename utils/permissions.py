@@ -44,3 +44,17 @@ class IsStudent(BasePermission):
             and user.is_authenticated
             and user.role in ["student",]
         )
+        
+        
+class IsAffiliate(BasePermission):
+    message = "Only affiliates can access this."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            user
+            and user.is_authenticated
+            and user.role in ["affiliate",]
+        )
+        
+        

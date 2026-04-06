@@ -125,11 +125,49 @@ class AffiliateCourseListSerializer(serializers.ModelSerializer):
         
 
 
+         
+    
+    
         
+    
 
-        
+# Serializer for affiliate commissions in history
+class AffiliateCommissionHistorySerializer(serializers.ModelSerializer):
+    order_id = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="product.title", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    commission_amount = serializers.DecimalField(source="commission_rate", max_digits=10, decimal_places=2, read_only=True)
+    commission_percentage = serializers.SerializerMethodField()
+    date = serializers.DateTimeField(source="created_at", format="%b %d, %Y", read_only=True)
+
+    class Meta:
+        model = AffiliateCommission
+        fields = [
+            "id", "order_id", "course_title", "customer_name", 
+            "price", "commission_percentage", "commission_amount", 
+            "status", "date"
+        ]
+
+    def get_order_id(self, obj):
+        return obj.order.order_id if obj.order else "N/A"
+
+    def get_customer_name(self, obj):
+        return obj.order.user.name if obj.order and obj.order.user else "Unknown"
+
+    def get_price(self, obj):
+        return obj.order.total_amount if obj.order else "0.00"
+
+    def get_commission_percentage(self, obj):
+        # Fallback to general rate if specific item rate is not stored separately
+        return f"{int(obj.affiliate.commission_rate * 100)}%"
     
     
     
-        
     
+    
+class AffiliateProfileSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id","name","email","phone","avatar","is_verified","created_at","updated_at",]
+        read_only_fields = ["id","email","is_verified","created_at","updated_at",]

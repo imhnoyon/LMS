@@ -60,7 +60,8 @@ class Affiliate(models.Model):
     address = models.TextField(blank=True)
 
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.10)
-
+    stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_onboarding_completed = models.BooleanField(default=False)
     total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
@@ -84,19 +85,26 @@ class Affiliate(models.Model):
 
 # Affiliate Commission Model
 class AffiliateCommission(models.Model):
-    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE)
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("paid", "Paid"),
+    ]
+
+    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="commissions_records")
     product = models.ForeignKey(Course, on_delete=models.CASCADE)
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2)
+    order = models.ForeignKey("orders.Order", on_delete=models.CASCADE, related_name="affiliate_commissions", null=True, blank=True)
+    commission_rate = models.DecimalField(max_digits=12, decimal_places=2) 
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
         
     def __str__(self):
-        return f"{self.affiliate.user.email} - {self.commission_rate}"
-    
-    
-    
+        return f"{self.affiliate.user.email} - {self.commission_rate} ({self.status})"
+
+
 # Affiliate Course Link Model
 class AffiliateCourseLink(models.Model):
     affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="course_links")
@@ -123,6 +131,26 @@ class AffiliateCourseLink(models.Model):
             base = slugify(self.course.title)[:20]
             self.code = f"{self.affiliate.id}-{base}-{uuid.uuid4().hex[:6].upper()}"
         super().save(*args, **kwargs)
+
+
+# Affiliate Referral Click Model
+class AffiliateReferralClick(models.Model):
+    affiliate = models.ForeignKey(Affiliate, on_delete=models.CASCADE, related_name="referral_clicks")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    affiliate_link = models.ForeignKey(AffiliateCourseLink, on_delete=models.CASCADE)
+    code = models.CharField(max_length=50)
+    session_key = models.CharField(max_length=255, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    clicked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    is_converted = models.BooleanField(default=False)
+    clicked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-clicked_at"]
+
+    def __str__(self):
+        return f"{self.affiliate.user.name} - {self.course.title} ({self.clicked_at})"
  
  
  
