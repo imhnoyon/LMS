@@ -1,8 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated,IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Q
-from utils.permissions import IsInstructor, IsOrganization,IsInstructorOrOrganization
+from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization
 from .models import *
 from .serializers import *
 from utils.api_response import APIResponse
@@ -10,6 +10,28 @@ from utils.paginations import CustomPagination
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import json
+from apps.organizations.models import Membership
+
+# Helper function to check course ownership or organization access
+def get_course_with_permission(course_id, user):
+    course = get_object_or_404(Course, pk=course_id)
+    
+    # Check 1: User is the direct instructor
+    if course.instructor == user:
+        return course
+        
+    # Check 2: User is an admin/manager of the course's organization
+    if course.organization:
+        is_org_admin = Membership.objects.filter(
+            organization=course.organization,
+            user=user,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+            status=Membership.Status.ACTIVE
+        ).exists()
+        if is_org_admin:
+            return course
+            
+    return None
 
 # Create categories by admin (for now, we can create them via admin panel)
 class CategoryAPIView(APIView):
@@ -29,7 +51,7 @@ class CategoryAPIView(APIView):
             
         paginator = self.pagination_class()
         paginated_categories = paginator.paginate_queryset(categories, request, view=self)
-        serializer = CategorySerializer(paginated_categories,many=True,context={"request": request})
+        serializer = CategorySerializer(paginated_categories, many=True, context={"request": request})
 
         return paginator.get_paginated_response(
             serializer.data,
@@ -50,12 +72,26 @@ class CourseCreateView(APIView):
     def post(self, request):
         serializer = CourseBasicSerializer(data=request.data)
         if serializer.is_valid():
-            course = serializer.save(instructor=request.user)
+            organization = None
+            # If user is an organization admin, link the course to the organization
+            if request.user.role == "Or_admin":
+                membership = Membership.objects.filter(
+                    user=request.user, 
+                    role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                    status=Membership.Status.ACTIVE
+                ).first()
+                if membership:
+                    organization = membership.organization
+            
+            course = serializer.save(instructor=request.user, organization=organization)
             return APIResponse.success(data={'id': course.id, **serializer.data}, status_code=status.HTTP_201_CREATED)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk):
-        course = Course.objects.get(pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         serializer = CourseBasicSerializer(course, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -64,19 +100,20 @@ class CourseCreateView(APIView):
 
 
 class CourseAdvanceInfoManageView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, pk):
-        course = get_object_or_404(Course, pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         advance_info = CourseAdvanceInfo.objects.filter(course=course).first()
-
         data = request.data.copy()
 
         outcomes = data.get("outcomes")
         requirements = data.get("requirements")
 
-        # Parse JSON only if they are strings (typical for multipart/form-data)
         try:
             if outcomes and isinstance(outcomes, str):
                 data["outcomes"] = json.loads(outcomes)
@@ -95,8 +132,6 @@ class CourseAdvanceInfoManageView(APIView):
         )
 
         if serializer.is_valid():
-            # If creating a new AdvanceInfo, pass the course.
-            # If updating, the course is already on the instance.
             if advance_info is None:
                 serializer.save(course=course)
             else:
@@ -120,7 +155,10 @@ class CourseAdvanceInfoManageView(APIView):
         )
 
     def patch(self, request, pk):
-        course = get_object_or_404(Course, pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         advance_info = CourseAdvanceInfo.objects.filter(course=course).first()
 
         if not advance_info:
@@ -149,10 +187,12 @@ class CourseAdvanceInfoManageView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
-        
 
     def delete(self, request, pk):
-        course = get_object_or_404(Course, pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         advance_info = CourseAdvanceInfo.objects.filter(course=course).first()
 
         if not advance_info:
@@ -173,21 +213,28 @@ class CourseAdvanceInfoManageView(APIView):
 
 # ── Step 2: Advance Info 
 class CourseAdvanceView(APIView):
+    permission_classes = [IsInstructorOrOrganization, IsAuthenticated]
+    
     def post(self, request, pk):
-        course = Course.objects.get(pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         serializer = CourseAdvanceInfoSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save(course=course)
             return APIResponse.success(data=serializer.data)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
-
-
-
 # ── Step 3: Sections & Lectures 
 class SectionView(APIView):
+    permission_classes = [IsInstructorOrOrganization, IsAuthenticated]
+    
     def post(self, request, pk):
-        course = Course.objects.get(pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
         serializer = SectionSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save(course=course)
@@ -195,7 +242,11 @@ class SectionView(APIView):
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk, section_id):
-        section = Section.objects.get(pk=section_id, course_id=pk)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        section = get_object_or_404(Section, pk=section_id, course=course)
         serializer = SectionSerializer(section, data=request.data, partial=True, context={"request": request})
         if serializer.is_valid():
             serializer.save()
@@ -203,16 +254,23 @@ class SectionView(APIView):
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk, section_id):
-        Section.objects.filter(pk=section_id, course_id=pk).delete()
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        Section.objects.filter(pk=section_id, course=course).delete()
         return APIResponse.success(message="Section deleted successfully.")
 
 #  step -3 lecture added views
 class LectureView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, section_id):
         section = get_object_or_404(Section, pk=section_id)
+        # Check course permission
+        if not get_course_with_permission(section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
 
         serializer = LectureSerializer(
             data=request.data,
@@ -234,6 +292,8 @@ class LectureView(APIView):
 
     def patch(self, request, section_id, lecture_id):
         lecture = get_object_or_404(Lecture, pk=lecture_id, section_id=section_id)
+        if not get_course_with_permission(lecture.section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
 
         serializer = LectureSerializer(
             lecture,
@@ -256,6 +316,7 @@ class LectureView(APIView):
         )
 
     def get(self, request, section_id, lecture_id=None):
+        section = get_object_or_404(Section, pk=section_id)
         if lecture_id:
             lecture = get_object_or_404(Lecture, pk=lecture_id, section_id=section_id)
             serializer = LectureSerializer(lecture, context={"request": request})
@@ -275,6 +336,9 @@ class LectureView(APIView):
 
     def delete(self, request, section_id, lecture_id):
         lecture = get_object_or_404(Lecture, pk=lecture_id, section_id=section_id)
+        if not get_course_with_permission(lecture.section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
+            
         lecture.delete()
         return APIResponse.success(
             message="Lecture deleted successfully.",
@@ -285,29 +349,27 @@ class LectureView(APIView):
 
 # ── Quiz 
 class QuizView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
+    
     def post(self, request, section_id):
-        section = Section.objects.get(pk=section_id)
+        section = get_object_or_404(Section, pk=section_id)
+        if not get_course_with_permission(section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
 
         serializer = QuizSerializer(data=request.data)
         if serializer.is_valid():
             quiz = serializer.save(section=section)
 
-            # 👉 QUESTIONS AUTO ORDER
             question_order = 1
-
             for q_data in request.data.get('questions', []):
                 options = q_data.pop('options', [])
-
                 question = Question.objects.create(
                     quiz=quiz,
                     order=question_order,
                     **q_data
                 )
                 question_order += 1
-
-                # 👉 OPTIONS AUTO ORDER
                 option_order = 1
-
                 for opt in options:
                     QuestionOption.objects.create(
                         question=question,
@@ -328,8 +390,13 @@ class QuizView(APIView):
 
 # ── Step 4: Publish 
 class PublishCourseView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
+    
     def patch(self, request, pk):
-        course = Course.objects.get(pk=pk, instructor=request.user)
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied.", status_code=403)
+            
         course.status = 'published'
         course.save()
         return APIResponse.success(data={'status': 'published'})
@@ -375,7 +442,7 @@ class CourseListView(APIView):
     
 # Course list Seen by Instructor
 class CourseListByInstructorView(APIView):
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
     paginator_class = CustomPagination
 
     def get(self, request):
@@ -384,6 +451,7 @@ class CourseListByInstructorView(APIView):
         status_param = request.query_params.get('status')
 
         courses = Course.objects.filter(instructor=request.user).order_by('-id')
+        
 
         if search:
             courses = courses.filter(
@@ -457,6 +525,8 @@ class LiveClassManageView(APIView):
                 status_code=status.HTTP_201_CREATED
             )
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+
     
 
     def get(self, request, course_id):
@@ -470,7 +540,10 @@ class LiveClassManageView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def patch(self, request, course_id, class_id):
-        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id, instructor=request.user)
+        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id)
+        if not get_course_with_permission(course_id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
+            
         serializer = LiveClassSerializer(live_class, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -481,7 +554,10 @@ class LiveClassManageView(APIView):
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, course_id, class_id):
-        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id, instructor=request.user)
+        live_class = get_object_or_404(LiveClass, id=class_id, course_id=course_id)
+        if not get_course_with_permission(course_id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
+            
         live_class.delete()
         return APIResponse.success(message="Live class deleted successfully.")
 
@@ -494,7 +570,19 @@ class InstructorLiveClassStatsView(APIView):
         from django.utils import timezone
         now = timezone.now()
         
-        live_classes = LiveClass.objects.filter(instructor=request.user)
+        # Stats based on accessible courses (direct instructor or org admin)
+        if request.user.role == "Or_admin":
+             membership = Membership.objects.filter(
+                user=request.user,
+                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                status=Membership.Status.ACTIVE
+            ).first()
+             if membership:
+                 live_classes = LiveClass.objects.filter(course__organization=membership.organization)
+             else:
+                 live_classes = LiveClass.objects.none()
+        else:
+            live_classes = LiveClass.objects.filter(instructor=request.user)
         
         total_live_classes = live_classes.count()
         
@@ -510,14 +598,18 @@ class InstructorLiveClassStatsView(APIView):
         
         upcoming_live_classes_count = upcoming_sessions.count()
         
-        # Students enrolled in instructor's courses that have live classes
         from apps.enrollments.models import Enrollment
-        students_enrolled = Enrollment.objects.filter(
-            course__instructor=request.user, 
-            is_active=True
-        ).values('user').distinct().count()
+        if request.user.role == "Or_admin":
+             students_enrolled = Enrollment.objects.filter(
+                course__organization=membership.organization if membership else None, 
+                is_active=True
+            ).values('user').distinct().count()
+        else:
+            students_enrolled = Enrollment.objects.filter(
+                course__instructor=request.user, 
+                is_active=True
+            ).values('user').distinct().count()
 
-        # Serializing session lists for the dashboard
         upcoming_serialized = LiveClassSerializer(upcoming_sessions, many=True).data
         past_serialized = LiveClassSerializer(past_sessions, many=True).data
 
@@ -530,5 +622,3 @@ class InstructorLiveClassStatsView(APIView):
                 "past_sessions": past_serialized
             }
         )
-
-

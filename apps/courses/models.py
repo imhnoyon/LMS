@@ -50,6 +50,7 @@ class Course(models.Model):
 ]
 
     instructor     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
+    organization   = models.ForeignKey('organizations.Organization', on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
     title          = models.CharField(max_length=80)
     subtitle       = models.CharField(max_length=120, blank=True)
     category       = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='courses')
@@ -341,3 +342,20 @@ class QuizAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.quiz.title if self.quiz else 'Quiz'} ({self.score_percentage}%)"
+    
+    
+    
+# This model is for uploading live class session recordings and linking them to the respective course and section.
+class sessionRecordUploader(models.Model):
+    course= models.ForeignKey(Course, on_delete=models.CASCADE, related_name='session_recordings')
+    course_name = models.CharField(max_length=255)
+    title = models.CharField(max_length=255)
+    recording_file = models.FileField(upload_to='live_classes/recordings/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recording for {self.title} - {self.course_name}"
+    
+    
+    
+    

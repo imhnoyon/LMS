@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
+from apps.courses.models import sessionRecordUploader
 from apps.users.models import User
 from apps.organizations.models import Membership, Organization, Invitation
 from django.utils.timesince import timesince
@@ -135,4 +136,17 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
         if obj.user.last_login:
             return f"{timesince(obj.user.last_login)} ago"
         return "Never"
+    
+    
+    
+    
+    
+class LiveSessionUploaderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = sessionRecordUploader
+        fields = ["id","course_name", "title", "recording_file", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
+        
+        
+        
     

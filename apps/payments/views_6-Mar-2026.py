@@ -3,13 +3,13 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
 from apps.affiliates.models import Affiliate, AffiliateCommission
-from apps.organizations.models import Membership
 from utils.api_response import APIResponse
 from apps.orders.models import Order
 from utils.permissions import IsAffiliate, IsInstructor
 from .models import Payment
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework import status
+import stripe
 from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -20,9 +20,6 @@ from django.views import View
 from datetime import date
 from django.urls import reverse
 from django.db.models import Sum
-from apps.organizations.models import Membership
-import stripe
-stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 # Initialize Stripe with API key
@@ -119,6 +116,16 @@ class CreateStripeCheckoutSessionView(APIView):
             
 
 
+from datetime import date
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
+import stripe
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -212,7 +219,7 @@ class StripeWebhookView(APIView):
             return None
 
         try:
-            return Payment.objects.select_for_update().select_related("order", "user").get(id=payment_id)
+            return Payment.objects.select_related("order", "user").get(id=payment_id)
         except Payment.DoesNotExist:
             return None
 
@@ -304,27 +311,14 @@ class StripeWebhookView(APIView):
         platform_fee_rate = settings.PLATFORM_FEE_RATE
         
         order_items = payment.order.items.select_related(
-            "course", "course__instructor", "course__organization"
+            "course", "course__instructor"
         ).all()
 
         for item in order_items:
             course = item.course
-            if not course:
-                continue
-            
-            payout_user = None
-            
-            # 🏢 Organization logic: If the course belongs to an organization, find the admin
-            if course.organization:
-                admin_membership = Membership.objects.filter(organization=course.organization,role=Membership.Role.ADMIN).select_related("user").first()
-                if admin_membership:
-                    payout_user = admin_membership.user
-            
-            # 👨‍🏫 Fallback: If no organization or admin found, use the direct instructor
-            if not payout_user:
-                payout_user = course.instructor
+            instructor_user = getattr(course, "instructor", None)
 
-            if not payout_user:
+            if not course or not instructor_user:
                 continue
 
             item_total = Decimal(str(getattr(item, "paid_price", Decimal("0.00"))))
@@ -366,7 +360,7 @@ class StripeWebhookView(APIView):
 
             # 💰 Record Instructor Commission (Using .create to allow multiple sales of same course)
             Commission.objects.create(
-                user=payout_user,
+                user=instructor_user,
                 course=course,
                 payment_method=payment.payment_method or "Stripe",
                 order_amount=item_total,

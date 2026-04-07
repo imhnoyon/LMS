@@ -120,6 +120,9 @@ DATABASES = {
     'default': {
         'ENGINE': os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
         'NAME': BASE_DIR / os.getenv("DB_NAME", "db.sqlite3"),
+        'OPTIONS': {
+            'timeout': 20, # Higher timeout for SQLite to avoid locking issues
+        }
     }
 }
 

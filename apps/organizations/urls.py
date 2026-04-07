@@ -15,4 +15,9 @@ urlpatterns = [
     path("invitation/respond/<uuid:token>/", RespondInvitationView.as_view(), name="invitation-respond"),
     
     path("organization/instructors/dashboard/",OrganizationInstructorDashboardView.as_view(),name="organization-instructor-dashboard"),
+    path("instructors/live-classes/",InstructorOrganizationLiveClassStatsView.as_view(),name="organization-instructor-list"),
+    path("live-classes/<int:course_id>/",LiveClassOrganizationInstructorManageView.as_view(),name="organization-course-dashboard"),
+    path("courses/<int:course_id>/live-session/upload/", OrganizationLiveSessionUploadView.as_view(), name="live-session-upload"),
+    
+    path("organization-earnings/dashboard/",OrganizationEarningsDashboardView.as_view(),name="organization-earnings-dashboard"),
 ]

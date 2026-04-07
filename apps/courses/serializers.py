@@ -16,9 +16,9 @@ class CourseBasicSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'subtitle', 'category', 'topic',
             'language', 'level', 'price', 'discount_price',
-            'coupon_code', 'expiry_type', 'status'
+            'coupon_code', 'expiry_type', 'status', 'organization'
         ]
-        read_only_fields = ['id', 'status']
+        read_only_fields = ['id', 'status', 'organization']
 
 
 # Advance Information serializer

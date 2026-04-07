@@ -363,3 +363,17 @@ class LiveClassStudentSerializer(serializers.ModelSerializer):
         if LiveClassAttendance.objects.filter(live_class=obj, student=request.user).exists():
             return "Attended"
         return "Missed"
+    
+    
+# live session recording videos serializers
+
+class LiveRecordingVideo(serializers.ModelSerializer):
+        class Meta:
+            model = sessionRecordUploader
+            fields = ["id","course_name", "title", "recording_file", "uploaded_at"]
+            read_only_fields = ["id", "course_name", "title", "uploaded_at"]
+    
+    
+        
+        
+    

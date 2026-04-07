@@ -46,5 +46,11 @@ urlpatterns = [
     
     
     
+    # Live sessions classes
+    path("student/recordings/",StudentPurchasedCourseRecordingListView.as_view(),name="student-purchased-recordings"),
+    path("student/recordings/<int:pk>/",StudentRecordingDetailView.as_view(),name="student-purchased-recording-detail"),
+    
+    
+    
     
 ]

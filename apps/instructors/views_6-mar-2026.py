@@ -17,8 +17,6 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
 from django.db.models.functions import TruncDate, TruncMonth
-from rest_framework.parsers import MultiPartParser, FormParser
-from apps.organizations.serializers import LiveSessionUploaderSerializer
 
 # List pending instructors for admin review
 class PendingInstructorListView(APIView):
@@ -498,50 +496,3 @@ class WithdrawalRequestListView(APIView):
         serializer = WithdrawalRequestSerializer(paginated_data, many=True)
 
         return paginator.get_paginated_response(serializer.data)
-
-
-
-
-
-
-
-class InstructorLiveSessionUploadView(APIView):
-    permission_classes = [IsAuthenticated ,IsInstructor]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, course_id):
-        user = request.user
-        course = get_object_or_404(Course, id=course_id)
-
-        if user.role != "instructor":
-            return APIResponse.error(
-                message="Only instructors can upload videos.",
-                status_code=403
-            )
-
-        if getattr(course, "instructor_id", None) != user.id:
-            return APIResponse.error(
-                message="You can only upload videos to your own course.",
-                status_code=403
-            )
-
-        serializer = LiveSessionUploaderSerializer(
-            data=request.data,
-            context={"request": request}
-        )
-
-        if not serializer.is_valid():
-            return APIResponse.error(
-                message="Upload failed.",
-                errors=serializer.errors,
-                status_code=400
-            )
-
-        serializer.save(course=course,course_name=course.title   
-        )
-
-        return APIResponse.success(
-            message="Video uploaded successfully to your course.",
-            data=serializer.data,
-            status_code=201
-        )

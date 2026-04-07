@@ -626,3 +626,76 @@ class JoinLiveClassView(APIView):
                 "class_link": live_class.class_link
             }
         )
+        
+        
+class StudentPurchasedCourseRecordingListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+    def get(self, request):
+        user = request.user
+
+        if user.role != "student":
+            return APIResponse.error(
+                message="Only students can access purchased course recordings.",
+                status_code=403
+            )
+
+        enrolled_course_ids = Enrollment.objects.filter( user=user, is_active=True).values_list("course_id", flat=True)
+        recordings = sessionRecordUploader.objects.select_related("course").filter(course_id__in=enrolled_course_ids).order_by("-uploaded_at")
+        
+        search = request.query_params.get("search")
+        if search:
+            recordings = recordings.filter(title__icontains=search)
+            
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(recordings, request, view=self)
+        
+        serializer = LiveRecordingVideo(page, many=True,context={"request": request})
+
+        return  paginator.get_paginated_response(
+            data=serializer.data,
+            message="Purchased course recordings fetched successfully.",
+        )
+        
+    
+    
+
+class StudentRecordingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+
+        if user.role != "student":
+            return APIResponse.error(
+                message="Only students can access recording details.",
+                status_code=403
+            )
+
+        recording = get_object_or_404(
+            sessionRecordUploader.objects.select_related("course"),
+            pk=pk
+        )
+
+        is_enrolled = Enrollment.objects.filter(
+            user=user,
+            course=recording.course,
+            is_active=True
+        ).exists()
+
+        if not is_enrolled:
+            return APIResponse.error(
+                message="You do not have access to this recording.",
+                status_code=403
+            )
+
+        serializer = LiveRecordingVideo(
+            recording,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Recording fetched successfully.",
+            data=serializer.data,
+            status_code=200
+        )

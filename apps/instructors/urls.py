@@ -16,4 +16,8 @@ urlpatterns = [
     path("profile/", InstructorProfileUpdateView.as_view(), name="instructor-profile"),
     path("dashboard/", InstructorDashboardView.as_view(), name="instructor-dashboard"),
     path("earnings/", InstructorEarningsView.as_view(), name="instructor-earnings"),
+    
+    
+    #live classes upload
+    path("live-session/upload/<int:course_id>/", InstructorLiveSessionUploadView.as_view(), name="live-session-upload"),
 ]
