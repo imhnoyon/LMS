@@ -197,7 +197,7 @@ class Payout(models.Model):
 class Withdrawal(models.Model):
     STATUS_CHOICES = [
         ('pending',   'Pending'),
-        ('completed', 'Completed'),
+        ('approved', 'Approved'),
         ('cancelled', 'Cancelled'),
         ('rejected', 'Rejected'),
     ]

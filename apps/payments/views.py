@@ -3,10 +3,10 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
 from apps.affiliates.models import Affiliate, AffiliateCommission
-from apps.organizations.models import Membership
+from apps.organizations.models import Membership, Organization
 from utils.api_response import APIResponse
 from apps.orders.models import Order
-from utils.permissions import IsAffiliate, IsInstructor
+from utils.permissions import IsAffiliate, IsInstructor, IsOrganization
 from .models import Payment
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework import status
@@ -364,7 +364,7 @@ class StripeWebhookView(APIView):
             final_instructor_amount = remaining_for_payouts - affiliate_amount
             if final_instructor_amount < 0: final_instructor_amount = 0
 
-            # 💰 Record Instructor Commission (Using .create to allow multiple sales of same course)
+            #  Record Instructor Commission (Using .create to allow multiple sales of same course)
             Commission.objects.create(
                 user=payout_user,
                 course=course,
@@ -373,7 +373,7 @@ class StripeWebhookView(APIView):
                 commission_amount=final_instructor_amount,
             )
 
-            # 💰 Record Affiliate payout if exists
+            #  Record Affiliate payout if exists
             if affiliate_amount > 0:
                 affiliate.total_earned += affiliate_amount
                 affiliate.save(update_fields=["total_earned"])
@@ -646,9 +646,9 @@ class ApproveWithdrawView(APIView):
 
         status_value = status_value.lower()
 
-        if status_value not in ["completed", "rejected"]:
+        if status_value not in ["approved", "rejected"]:
             return APIResponse.error(
-                message="Invalid status. Use 'completed' or 'rejected'.",
+                message="Invalid status. Use 'approved' or 'rejected'.",
                 status_code=400
             )
 
@@ -665,6 +665,15 @@ class ApproveWithdrawView(APIView):
         stripe_account_id = None
         account_type = None
 
+        # Organization admin check
+        if hasattr(user, "organization_memberships") and user.organization_memberships.filter(role=Membership.Role.ADMIN).exists():
+            membership = user.organization_memberships.filter(role=Membership.Role.ADMIN).select_related("organization").first()
+            if membership and membership.organization:
+                payout_profile = membership.organization
+                stripe_account_id = getattr(membership.organization, "stripe_account_id", None)
+                account_type = "organization"
+                
+        
         # instructor profile check
         if hasattr(user, "instructor") and user.instructor:
             payout_profile = user.instructor
@@ -727,7 +736,7 @@ class ApproveWithdrawView(APIView):
                 # We log it, but don't fail the whole request because the Transfer was successful
                 print(f"Automatic bank payout failed: {str(e)}")
 
-            withdrawal.status = "completed"
+            withdrawal.status = "approved"
             withdrawal.stripe_transfer_id = transfer.id
             withdrawal.stripe_payout_id = stripe_payout_id
             withdrawal.failure_reason = None
@@ -739,11 +748,17 @@ class ApproveWithdrawView(APIView):
                 "updated_at"
             ])
 
+            if account_type == "organization":
+                payout_profile.current_balance -= withdrawal.amount
+                payout_profile.total_withdrawals += withdrawal.amount
+                payout_profile.save(update_fields=["current_balance", "total_withdrawals"])
+                
             # Update payout profile balances
             if account_type == "instructor":
                 payout_profile.current_balance -= withdrawal.amount
                 payout_profile.total_withdrawals += withdrawal.amount
                 payout_profile.save(update_fields=["current_balance", "total_withdrawals"])
+                
             elif account_type == "affiliate":
                 payout_profile.total_paid += withdrawal.amount
                 payout_profile.save(update_fields=["total_paid"])
@@ -843,9 +858,7 @@ class AffiliateCreateStripeConnectAccountView(APIView):
             else:
                 account = stripe.Account.retrieve(affiliate.stripe_account_id)
 
-            # SUCCESS return (on completion)
             return_url = request.build_absolute_uri(reverse("stripe-return-page"))
-            # REFRESH / ERROR return (if session expired or premature exit)
             refresh_url = request.build_absolute_uri(reverse("stripe-cancel"))
 
             account_link = stripe.AccountLink.create(
@@ -966,6 +979,215 @@ class AffiliateWithdrawRequestView(APIView):
 
         try:
             account = stripe.Account.retrieve(affiliate.stripe_account_id)
+        except Exception:
+            return APIResponse.error("Stripe account error", 400)
+
+        if not account.payouts_enabled:
+            return APIResponse.error("Stripe payouts not enabled", 400)
+
+        #  Retrieve Bank / Card details automatically from Stripe
+        bank_name = request.data.get("bank_name", "")
+        bank_last4 = ""
+
+        external_accounts = getattr(account, "external_accounts", None)
+        if external_accounts and getattr(external_accounts, "data", []):
+            default_acc = external_accounts.data[0]
+            acc_object = getattr(default_acc, "object", "")
+            
+            if acc_object == "bank_account":
+                bank_name = getattr(default_acc, "bank_name", bank_name)
+                bank_last4 = getattr(default_acc, "last4", "")
+            elif acc_object == "card":
+                brand = getattr(default_acc, "brand", "Card")
+                bank_name = f"{brand} Card"
+                bank_last4 = getattr(default_acc, "last4", "")
+
+        #  Create withdrawal
+        withdrawal = Withdrawal.objects.create(
+            user=user,
+            amount=amount,
+            bank_name=bank_name,
+            bank_last4=bank_last4,
+            previous_balance=available_balance,
+            current_balance=available_balance - amount,
+            withdraw_method=withdraw_method,
+            status="pending",
+        )
+
+        return APIResponse.success(
+            message="Withdraw request submitted",
+            data={
+                "withdraw_id": withdrawal.withdraw_id,
+                "amount": str(withdrawal.amount),
+                "status": withdrawal.status,
+            }
+        )
+        
+        
+        
+        
+# Withdrawal views for Organizations 
+class OrganizationCreateStripeConnectAccountView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def post(self, request):
+        user = request.user
+        membership = Membership.objects.filter(
+            user=user, 
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).first()
+        
+        if not membership:
+            return APIResponse.error("Organization account not found or unauthorized.", 404)
+            
+        organization = membership.organization
+
+        try:
+           
+            if not organization.stripe_account_id:
+                account = stripe.Account.create(
+                    type="express",
+                    country="US",  
+                    email=user.email,
+                    capabilities={
+                        "transfers": {"requested": True},
+                        "card_payments": {"requested": True},
+                    },
+                )
+
+                organization.stripe_account_id = account.id
+                organization.save(update_fields=["stripe_account_id"])
+
+            else:
+                account = stripe.Account.retrieve(organization.stripe_account_id)
+
+            return_url = request.build_absolute_uri(reverse("stripe-return-page"))
+            refresh_url = request.build_absolute_uri(reverse("stripe-cancel"))
+
+            account_link = stripe.AccountLink.create(
+                account=account.id,
+                refresh_url=refresh_url,
+                return_url=return_url,
+                type="account_onboarding",
+            )
+
+            details_submitted = getattr(account, "details_submitted", False)
+            if details_submitted and not organization.stripe_onboarding_completed:
+                organization.stripe_onboarding_completed = True
+                organization.save(update_fields=["stripe_onboarding_completed"])
+
+            #  4. Response
+            return APIResponse.success(
+                message="Stripe onboarding link generated successfully",
+                data={
+                    "stripe_account_id": account.id,
+                    "onboarding_url": account_link.url,
+                    "charges_enabled": getattr(account, "charges_enabled", False),
+                    "payouts_enabled": getattr(account, "payouts_enabled", False),
+                    "details_submitted": details_submitted,
+                },
+                status_code=status.HTTP_200_OK
+            )
+
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+            
+            
+            
+class OrganizationStripeDashboardLoginLinkView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def post(self, request):
+        user = request.user
+        membership = Membership.objects.filter(
+            user=user, 
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).first()
+        
+        if not membership:
+            return APIResponse.error("Organization account not found or unauthorized.", 404)
+            
+        organization = membership.organization
+
+        if not organization.stripe_account_id:
+            return APIResponse.error(
+                message="Stripe account not connected.",
+                status_code=400
+            )
+
+        try:
+            login_link = stripe.Account.create_login_link(organization.stripe_account_id)
+            return APIResponse.success(
+                message="Login link created successfully",
+                data={"url": login_link.url}
+            )
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+class  OrganizationWithdrawRequestView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+        membership = Membership.objects.filter(
+            user=user, 
+            role__in=[Membership.Role.ADMIN, Membership.Role.ADMIN]
+        ).first()
+        
+        if not membership:
+            return APIResponse.error("Organization account not found or unauthorized.", 404)
+            
+        organization = membership.organization
+        amount = request.data.get("amount")
+        withdraw_method = request.data.get("withdraw_method", "unknown")
+
+        if not amount:
+            return APIResponse.error("Amount is required", 400)
+
+        try:
+            amount = Decimal(str(amount))
+        except:
+            return APIResponse.error("Invalid amount", 400)
+
+        if amount <= 0:
+            return APIResponse.error("Amount must be greater than 0", 400)
+
+        #  Total earnings (from all organization courses)
+        total_earnings = Commission.objects.filter(
+            course__organization=organization
+        ).aggregate(total=Sum("commission_amount"))["total"] or Decimal("0.00")
+        
+        print(f"Total Earnings*******: {total_earnings}")
+        
+        #  Already withdrawn
+        withdrawn_amount = Withdrawal.objects.filter(
+            user=user,
+            status__in=["pending", "completed"]
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+        print(f"Withdrawn Amount*******: {withdrawn_amount}")
+        
+        available_balance = total_earnings - withdrawn_amount
+        print(f"Available Balance*******: {available_balance}")
+        if amount > available_balance:
+            return APIResponse.error(
+                f"Insufficient balance. Available: {available_balance}", 400
+            )
+
+        #  Stripe account check
+        if not organization.stripe_account_id:
+            return APIResponse.error("Stripe account not connected", 400)
+
+        try:
+            account = stripe.Account.retrieve(organization.stripe_account_id)
         except Exception:
             return APIResponse.error("Stripe account error", 400)
 
