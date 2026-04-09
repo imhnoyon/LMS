@@ -708,18 +708,33 @@ class ApproveWithdrawView(APIView):
 
         # completed flow
         try:
+            # 1. Transfer funds from Platform balance to Instructor's Stripe Balance
             transfer = stripe.Transfer.create(
                 amount=int(withdrawal.amount * 100),
                 currency="usd",
                 destination=stripe_account_id
             )
 
+            stripe_payout_id = None
+            try:
+                payout = stripe.Payout.create(
+                    amount=int(withdrawal.amount * 100),
+                    currency="usd",
+                    stripe_account=stripe_account_id
+                )
+                stripe_payout_id = payout.id
+            except Exception as e:
+                # We log it, but don't fail the whole request because the Transfer was successful
+                print(f"Automatic bank payout failed: {str(e)}")
+
             withdrawal.status = "completed"
             withdrawal.stripe_transfer_id = transfer.id
+            withdrawal.stripe_payout_id = stripe_payout_id
             withdrawal.failure_reason = None
             withdrawal.save(update_fields=[
                 "status",
                 "stripe_transfer_id",
+                "stripe_payout_id",
                 "failure_reason",
                 "updated_at"
             ])
@@ -814,7 +829,7 @@ class AffiliateCreateStripeConnectAccountView(APIView):
             if not affiliate.stripe_account_id:
                 account = stripe.Account.create(
                     type="express",
-                    country="US",  # 👉 change dynamically later
+                    country="US",  # change dynamically later
                     email=user.email,
                     capabilities={
                         "transfers": {"requested": True},

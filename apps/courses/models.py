@@ -81,9 +81,19 @@ class Course(models.Model):
             return None
         return self.category.name
     
+    def lectures(self):
+        """Returns the total number of lectures in all sections of this course."""
+        return Lecture.objects.filter(section__course=self).count()
+
+    def quizzes_count(self):
+        """Returns the total number of quizzes in all sections and lectures of this course."""
+        return Quiz.objects.filter(
+            models.Q(section__course=self) | models.Q(lecture__section__course=self)
+        ).distinct().count()
+
     def get_progress_percentage(self, user):
         """Calculates the course progress percentage for a specific user based on lectures."""
-        total_lectures = Lecture.objects.filter(section__course=self).count()
+        total_lectures = self.lectures()
         if total_lectures == 0:
             return 0
         

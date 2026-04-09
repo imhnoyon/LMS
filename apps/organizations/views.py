@@ -1,8 +1,11 @@
+import calendar
+
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
-from apps.courses.models import Course, LiveClass
-from apps.courses.serializers import LiveClassSerializer
+from apps.courses.models import Course, LiveClass, Review
+from apps.courses.serializers import CourseDetailSerializer, LiveClassSerializer
+from apps.enrollments.models import Enrollment
 from apps.payments.models import Commission, Payment
 from utils.permissions import IsInstructor, IsOrganization
 from .models import Organization, Membership, Invitation
@@ -12,10 +15,13 @@ from utils.api_response import APIResponse
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Q, Sum
+from django.db.models import Q, Avg, Count, Sum
 from apps.users.models import User
 from utils.emails import send_invitation_email
 from decimal import Decimal
+from django.db.models.functions import TruncDate, TruncMonth
+from datetime import timedelta
+
 
 # View to list unverified organizations for admin review
 class UnverifiedOrganizationListView(APIView):
@@ -466,7 +472,224 @@ class OrganizationLiveSessionUploadView(APIView):
             status_code=201
         )
 
+class OrganizationDashboardView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def get(self, request):
+        user = request.user
+
+        #  get organization (admin/manager only)
+        membership = Membership.objects.filter(
+            user=user,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+            status=Membership.Status.ACTIVE
+        ).select_related("organization").first()
+
+        if not membership:
+            return APIResponse.error(
+                message="You are not authorized for any organization.",
+                status_code=403
+            )
+
+        organization = membership.organization
+
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        start_of_week = today - timedelta(days=today.weekday())
+
+        org_courses = Course.objects.filter(organization=organization)
+
+        # 📊 Course stats
+        course_created = org_courses.count()
+
+        active_courses = org_courses.filter(
+            status__in=["published", "accepted", "featured"]
+        ).count()
+
+        students_enrolled = Enrollment.objects.filter(
+            course__organization=organization,
+            is_active=True
+        ).values("user").distinct().count()
+
+        # 🎥 Live classes
+        live_classes = LiveClass.objects.filter(course__organization=organization)
+        now = timezone.now()
+
+        past_sessions = live_classes.filter(
+            Q(scheduled_date__lt=now.date()) |
+            Q(scheduled_date=now.date(), scheduled_time__lte=now.time())
+        )
+
+        upcoming_live_classes_count = past_sessions.count()
+
+        # 💰 Earnings (FULL org revenue)
+        total_earning = Commission.objects.filter(
+            course__organization=organization
+        ).aggregate(
+            total=Sum("commission_amount")
+        )["total"] or Decimal("0.00")
+
+        # ⭐ Rating
+        average_rating = Review.objects.filter(
+            course__organization=organization
+        ).aggregate(
+            avg=Avg("rating")
+        )["avg"] or 0.0
+
+        #  Recent Activity
+        recent_enrollments = Enrollment.objects.filter(
+            course__organization=organization
+        ).select_related("user", "course").order_by("-enrolled_at")[:10]
+
+        recent_activity = [
+            {
+                "id": e.id,
+                "student_name": getattr(e.user, "name", "") or getattr(e.user, "username", ""),
+                "course_title": e.course.title,
+                "message": f'{getattr(e.user, "name", "") or getattr(e.user, "username", "")} purchased "{e.course.title}"',
+                "created_at": e.enrolled_at,
+            }
+            for e in recent_enrollments
+        ]
+
+        # 📈 Monthly Revenue Chart
+        current_year = today.year
+
+        revenue_rows = Commission.objects.filter(
+            course__organization=organization,
+            created_at__year=current_year
+        ).annotate(
+            month=TruncMonth("created_at")
+        ).values("month").annotate(
+            total=Sum("commission_amount")
+        )
+
+        revenue_map = {
+            row["month"].month: row["total"] or Decimal("0.00")
+            for row in revenue_rows
+        }
+
+        monthly_revenue_chart = [
+            {
+                "label": calendar.month_abbr[m],
+                "amount": revenue_map.get(m, Decimal("0.00"))
+            }
+            for m in range(1, 13)
+        ]
+
+        #  Rating Breakdown
+        total_reviews = Review.objects.filter(
+            course__organization=organization
+        ).count()
+
+        rating_breakdown = []
+        for stars in [5, 4, 3, 2, 1]:
+            count = Review.objects.filter(
+                course__organization=organization,
+                rating__gte=stars,
+                rating__lt=stars + 1
+            ).count()
+
+            percentage = round((count / total_reviews) * 100, 2) if total_reviews > 0 else 0
+
+            rating_breakdown.append({
+                "stars": stars,
+                "count": count,
+                "percentage": percentage
+            })
+
+        # 📊 Weekly Course Overview
+        week_days = [start_of_week + timedelta(days=i) for i in range(7)]
+
+        enrollment_rows = Enrollment.objects.filter(
+            course__organization=organization,
+            enrolled_at__date__gte=start_of_week,
+            enrolled_at__date__lte=today
+        ).annotate(
+            day=TruncDate("enrolled_at")
+        ).values("day").annotate(total=Count("id"))
+
+        completion_rows = Enrollment.objects.filter(
+            course__organization=organization,
+            is_completed=True,
+            enrolled_at__date__gte=start_of_week,
+            enrolled_at__date__lte=today
+        ).annotate(
+            day=TruncDate("enrolled_at")
+        ).values("day").annotate(total=Count("id"))
+
+        enrollment_map = {row["day"]: row["total"] for row in enrollment_rows}
+        completion_map = {row["day"]: row["total"] for row in completion_rows}
+
+        course_overview_chart = [
+            {
+                "label": day.strftime("%a"),
+                "enrollments": enrollment_map.get(day, 0),
+                "completions": completion_map.get(day, 0),
+            }
+            for day in week_days
+        ]
+
+        return APIResponse.success(
+            message="Organization dashboard fetched successfully.",
+            data={
+                "course_created": course_created,
+                "active_courses": active_courses,
+                "students_enrolled": students_enrolled,
+                "online_sessions": upcoming_live_classes_count,
+                "total_earning": total_earning,
+                "average_rating": round(float(average_rating), 1) if average_rating else 0.0,
+                "recent_activity": recent_activity,
+                "monthly_revenue_chart": monthly_revenue_chart,
+                "rating_breakdown": rating_breakdown,
+                "course_overview_chart": course_overview_chart,
+            },
+            status_code=200
+        )
     
+    
+ # Course list Seen by Organization Instructor (only org courses, with search and filter)
+class CourseListByOrganizationView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        status_param = request.query_params.get('status')
+
+        membership = Membership.objects.filter(user=request.user, status=Membership.Status.ACTIVE).first()
+        if not membership:
+            courses = Course.objects.none()
+        else:
+            courses = Course.objects.filter(organization=membership.organization).order_by('-id')
+        
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search) |
+                Q(language__icontains=search) |
+                Q(level__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category__name__iexact=category)
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
+
+        paginator = self.paginator_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+
+        serializer = CourseDetailSerializer(
+            paginated_courses,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)   
+
         
 class OrganizationEarningsDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsOrganization]

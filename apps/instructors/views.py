@@ -308,16 +308,6 @@ class InstructorDashboardView(APIView):
         ).values("day").annotate(
             total=Sum("commission_amount")
         ).order_by("day")
-
-
-        # monthly_revenue_chart = [
-        #     {
-        #         "label": row["day"].strftime("%b %d"),
-        #         "amount": row["total"] or Decimal("0.00")
-        #     }
-        #     for row in revenue_rows
-        # ]
-        
         
         current_year = today.year
 

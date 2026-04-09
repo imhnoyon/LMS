@@ -159,7 +159,6 @@ class AffiliateCommissionHistorySerializer(serializers.ModelSerializer):
         return obj.order.total_amount if obj.order else "0.00"
 
     def get_commission_percentage(self, obj):
-        # Fallback to general rate if specific item rate is not stored separately
         return f"{int(obj.affiliate.commission_rate * 100)}%"
     
     

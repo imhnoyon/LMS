@@ -23,6 +23,12 @@ urlpatterns = [
     path("affiliate/stripe/dashboard-link/", AffiliateStripeDashboardLoginLinkView.as_view()),
     path("affiliate/withdraw/request/", AffiliateWithdrawRequestView.as_view()),
     
+    
+    # Organization Withdrawals
+    # path("organization/stripe/connect/", OrganizationCreateStripeConnectAccountView.as_view()),
+    # path("organization/stripe/dashboard-link/", OrganizationStripeDashboardLoginLinkView.as_view()),
+    # path("organization/withdraw/request/", OrganizationWithdrawRequestView.as_view()),
+    
     path("stripe/return-page/", StripeReturnPageView.as_view(), name="stripe-return-page"),
     path("stripe/cancel/", StripeCancelPageView.as_view(), name="stripe-cancel"),
 ]

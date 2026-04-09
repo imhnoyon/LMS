@@ -19,5 +19,10 @@ urlpatterns = [
     path("live-classes/<int:course_id>/",LiveClassOrganizationInstructorManageView.as_view(),name="organization-course-dashboard"),
     path("courses/<int:course_id>/live-session/upload/", OrganizationLiveSessionUploadView.as_view(), name="live-session-upload"),
     
+    # My courses 
+    path("my-courses/", CourseListByOrganizationView.as_view(), name="my-courses"),
+    
+    # Organization Earnings Dashboard
+    path("organization-deshboard/", OrganizationDashboardView.as_view(), name="organization-earnings"),
     path("organization-earnings/dashboard/",OrganizationEarningsDashboardView.as_view(),name="organization-earnings-dashboard"),
 ]
