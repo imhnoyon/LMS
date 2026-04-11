@@ -183,7 +183,7 @@ class CreateOrderFromCartView(APIView):
             # Skip Logic
             if Enrollment.objects.filter(user=user, course=course).exists() or course.instructor == user:
                 continue
-            if course.status not in ["published", "accepted", "featured"]:
+            if course.status not in ["accepted", "featured"]:
                 continue
 
             original_price = Decimal(course.price)

@@ -4,7 +4,6 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from apps.affiliates.models import Affiliate, AffiliateCommission
 from apps.organizations.models import Membership, Organization
-from apps.users.models import User
 from utils.api_response import APIResponse
 from apps.orders.models import Order
 from utils.permissions import IsAffiliate, IsInstructor, IsOrganization
@@ -302,9 +301,7 @@ class StripeWebhookView(APIView):
    
 
     def _create_course_commissions(self, payment):
-        from django.db.models import F
         platform_fee_rate = settings.PLATFORM_FEE_RATE
-        total_platform_revenue = Decimal("0.00")
         
         order_items = payment.order.items.select_related(
             "course", "course__instructor", "course__organization"
@@ -315,21 +312,11 @@ class StripeWebhookView(APIView):
             if not course:
                 continue
             
-            item_total = Decimal(str(getattr(item, "paid_price", Decimal("0.00"))))
-            
-            # Phase 1: Platform Fee (Always collect this for every item)
-            platform_amount = (item_total * platform_fee_rate).quantize(Decimal("0.01"))
-            total_platform_revenue += platform_amount
-            remaining_for_payouts = item_total - platform_amount
-
             payout_user = None
             
             # 🏢 Organization logic: If the course belongs to an organization, find the admin
             if course.organization:
-                admin_membership = Membership.objects.filter(
-                    organization=course.organization,
-                    role=Membership.Role.ADMIN
-                ).select_related("user").first()
+                admin_membership = Membership.objects.filter(organization=course.organization,role=Membership.Role.ADMIN).select_related("user").first()
                 if admin_membership:
                     payout_user = admin_membership.user
             
@@ -338,10 +325,18 @@ class StripeWebhookView(APIView):
                 payout_user = course.instructor
 
             if not payout_user:
-                # If there's no one to pay the remainder to, we still collected the platform fee
                 continue
 
-            # Phase 2: Affiliate Commission
+            item_total = Decimal(str(getattr(item, "paid_price", Decimal("0.00"))))
+            
+            # Phase 1: Always take 10% for the Platform
+            platform_amount = (item_total * platform_fee_rate).quantize(Decimal("0.01"))
+            remaining_for_payouts = item_total - platform_amount
+            
+            payment.user.platform_revenue += platform_amount
+            payment.user.save(update_fields=["platform_revenue"])
+
+            # Phase 2: Check for Affiliate Commission
             affiliate_amount = Decimal("0.00")
             referral_code = getattr(item, "referral_code", None)
             from apps.affiliates.models import AffiliateCourseLink, AffiliateCommission, AffiliateReferralClick
@@ -361,16 +356,18 @@ class StripeWebhookView(APIView):
                 link = AffiliateCourseLink.objects.filter(code=referral_code, course=course).first()
                 if link:
                     affiliate = link.affiliate
+                   
                     aff_comm_config = AffiliateCommission.objects.filter(affiliate=affiliate, product=course).first()
                     aff_rate_raw = getattr(aff_comm_config, "commission_rate", affiliate.commission_rate)
 
                     aff_multiplier = aff_rate_raw if aff_rate_raw < 1 else (aff_rate_raw / Decimal("100"))
                     affiliate_amount = (item_total * aff_multiplier).quantize(Decimal("0.01"))
 
+         
             final_instructor_amount = remaining_for_payouts - affiliate_amount
             if final_instructor_amount < 0: final_instructor_amount = 0
 
-            # 💰 Record Instructor Commission
+            #  Record Instructor Commission (Using .create to allow multiple sales of same course)
             Commission.objects.create(
                 user=payout_user,
                 course=course,
@@ -379,9 +376,9 @@ class StripeWebhookView(APIView):
                 commission_amount=final_instructor_amount,
             )
 
-            # 💸 Record Affiliate payout
+            #  Record Affiliate payout if exists
             if affiliate_amount > 0:
-                affiliate.total_earned = F("total_earned") + affiliate_amount
+                affiliate.total_earned += affiliate_amount
                 affiliate.save(update_fields=["total_earned"])
                 if active_click:
                     active_click.is_converted = True
@@ -393,12 +390,6 @@ class StripeWebhookView(APIView):
                     order=payment.order,
                     commission_rate=affiliate_amount, 
                 )
-
-        # 🏢 Update Platform Admin Revenue ONCE for the entire order
-        if total_platform_revenue > 0:
-            User.objects.filter(role="owner").update(
-                platform_revenue=F("platform_revenue") + total_platform_revenue
-            )
         
 
     def handle_payment_intent_succeeded(self, payment_intent):

@@ -148,3 +148,12 @@ class LecturesProgressAdmin(admin.ModelAdmin):
     list_display = ('course', 'user', 'lecture', 'is_completed')
     list_filter = ('course', 'user')
     search_fields = ('user__full_name',)
+    
+    
+    
+    
+@admin.register(CourseReviewHistory)
+class CourseReviewHistoryAdmin(admin.ModelAdmin):
+    list_display = ('course', 'user', 'status', 'reviewed_at')
+    list_filter = ('course', 'user', 'status')
+    

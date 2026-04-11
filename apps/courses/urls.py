@@ -5,8 +5,11 @@ urlpatterns = [
     # Admin can create categories (for now, we can create them via admin panel)
     path('categories/', views.CategoryAPIView.as_view()),
     path('courses-list/', views.CourseListView.as_view(), name='course-list'),
+    path('courses-lists/', views.CourseListapiView.as_view(), name='course-list'),
+
     path('courses-list/<int:pk>/', views.courseDetail.as_view(), name='course-list'),
     
+    path('coursesAdmin/review-history/', views.courseAdminReviewHistoryView.as_view(), name='course-admin-review-history'),
     
     # Instructor Deshboard
     path('courses-list-instructor/',views.CourseListByInstructorView.as_view(), name='course-list-instructor'),

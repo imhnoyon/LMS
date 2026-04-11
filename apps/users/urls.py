@@ -20,4 +20,10 @@ urlpatterns = [
     path("send-email/", SendEmailView.as_view(), name="send-email"),
     path("block/<uuid:pk>/", BlockUserView.as_view(), name="block-unblock-user"),
     path("unblock/<uuid:pk>/", UnblockUserView.as_view(), name="unblock-user"),
+    
+    path("admin/dashboard-data/", AdminDashboardStatsView.as_view(), name="admin-dashboard-data"),
+    path("admin/payments/", AdminPaymentsDeshboardView.as_view(), name="admin-payments"),
+    path("admin/analytics/", AdminAnalyticsView.as_view(), name="admin-analytics"),
+    
+    
 ]

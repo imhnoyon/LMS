@@ -56,8 +56,25 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ['id', 'title', 'date_of_birth', 'gender', 'bio', 'user']
-        read_only_fields = ['id']
+        fields = ['id', 'title', 'date_of_birth', 'gender', 'bio', 'first_name', 'last_name', 'age', 'user', 'created_at']
+        read_only_fields = ['id', 'age', 'created_at']
+
+    def to_internal_value(self, data):
+
+        if "user.name" in data:
+            user_data = data.get("user", {})
+            if isinstance(user_data, str): user_data = {} 
+            user_data["name"] = data.pop("user.name")
+            data["user"] = user_data
+            
+        if "user.phone" in data:
+            user_data = data.get("user", {})
+            if isinstance(user_data, str): user_data = {} 
+            user_data["phone"] = data.pop("user.phone")
+            data["user"] = user_data
+            
+        return super().to_internal_value(data)
+        
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', None)
@@ -113,7 +130,9 @@ class EnrollCourseSerializer(serializers.ModelSerializer):
     course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
     course_price = serializers.DecimalField(source="course.price", max_digits=10, decimal_places=2, read_only=True)
     instructor = serializers.CharField(source="course.instructor.name", read_only=True)
-    
+    ratings = serializers.DecimalField(source="course.rating", max_digits=3, decimal_places=2, read_only=True)
+    category=serializers.CharField(source="course.Category", read_only=True)
+    instructor_profile = serializers.ImageField(source="course.instructor.avatar", read_only=True)
     # 🔹 PROGRESS FIELDS
     total_lectures = serializers.SerializerMethodField()
     completed_lectures = serializers.SerializerMethodField()
@@ -122,7 +141,7 @@ class EnrollCourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Enrollment
         fields = [
-            "id", "course", "course_title", "course_thumbnail", "course_price", "instructor",
+            "id", "course", "course_title",'category', "course_thumbnail",'instructor_profile', "course_price",'ratings', "instructor",
             "is_active", "is_completed", "is_started", "enrolled_at",
             "total_lectures", "completed_lectures", "progress_percentage"
         ]

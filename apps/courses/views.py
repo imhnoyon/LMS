@@ -500,6 +500,13 @@ class courseDetail(APIView):
         elif status_value == "rejected":
             course.status = "Rejected"
         course.save()
+        
+        CourseReviewHistory.objects.create(
+            course=course,
+            user=request.user,
+            status=course.status
+        )
+        
         return APIResponse.success(
             message="Course status updated successfully",
             data={"status": course.status}
@@ -622,3 +629,63 @@ class InstructorLiveClassStatsView(APIView):
                 "past_sessions": past_serialized
             }
         )
+
+
+
+class CourseListapiView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        status_param = request.query_params.get('status')
+
+        courses = Course.objects.filter(status='published').order_by('-id')
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search) |
+                Q(language__icontains=search) |
+                Q(level__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category__name__iexact=category)
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
+
+        paginator = self.paginator_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+
+        serializer = CourseDetailSerializer(
+            paginated_courses,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)
+    
+    
+    
+    
+class courseAdminReviewHistoryView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        course_id = request.query_params.get('course_id')
+        review_history = CourseReviewHistory.objects.all()
+
+        if course_id:
+            review_history = review_history.filter(course_id=course_id)
+            
+        review_history = review_history.order_by('-reviewed_at')
+        
+        paginator = self.pagination_class()
+        paginated_history = paginator.paginate_queryset(review_history, request)
+        serializer = courseReviewHistorySerializer(paginated_history, many=True)
+        
+        return paginator.get_paginated_response(serializer.data)

@@ -368,4 +368,12 @@ class sessionRecordUploader(models.Model):
     
     
     
-    
+#course review history model to track the status changes of a course (accepted, rejected, pending) along with the user who made the change and timestamp. This will help in auditing and understanding the review process for each course.
+class CourseReviewHistory(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='review_history')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_review_history')
+    status = models.CharField(max_length=20,)
+    reviewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-reviewed_at"]

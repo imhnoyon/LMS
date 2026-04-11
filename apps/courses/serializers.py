@@ -319,3 +319,15 @@ class LiveClassAttendanceSerializer(serializers.ModelSerializer):
             'status', 'joined_at', 'left_at'
         ]
         read_only_fields = ['id', 'joined_at', 'left_at']
+
+
+# Course Admin Review History Serializer
+class courseReviewHistorySerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    instructor_name = serializers.CharField(source='course.instructor.name', read_only=True)
+    reviewer_name = serializers.CharField(source='user.name', read_only=True)
+
+    class Meta:
+        model = CourseReviewHistory
+        fields = ['id', 'course', 'course_title', 'instructor_name', 'reviewer_name', 'status', 'reviewed_at']
+        read_only_fields = ['id', 'course', 'user', 'status', 'reviewed_at']

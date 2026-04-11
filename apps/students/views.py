@@ -28,7 +28,7 @@ class StudentDashboardView(APIView):
         active_courses_count = enrollments.filter(is_started=True).count()
         completed_courses_count = enrollments.filter(is_completed=True).count()
         recently_enrolled = [
-            enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:4]
+            enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:6]
         ]
 
         recent_invoices = Invoice.objects.filter(user=user).order_by("-invoice_date", "-created_at")[:10]
