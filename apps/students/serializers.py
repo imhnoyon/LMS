@@ -75,10 +75,37 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
+class RecentlyEnrolledCourseSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.ImageField(source="advance_info.thumbnail", read_only=True)
+    course_progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Course
+        fields = ["id", "title", "subtitle", "thumbnail", "price", "course_progress"]
+
+    def get_course_progress(self, obj):
+        user = self.context.get("request").user
+        return obj.get_progress_percentage(user)
+
+class StudentInvoiceSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="user.name", read_only=True)
+    class Meta:
+        model = Invoice
+        fields = ["id", "name", "invoice_id", "payment_method", "amount", "status", "invoice_date", "created_at"]
+
+class DashboardQuizAttemptSerializer(serializers.ModelSerializer):
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+    class Meta:
+        model = QuizAttempt
+        fields = ["id", "quiz_title", "score_percentage", "submitted_at"]
+
 class StudentDashboardSerializer(serializers.Serializer):
     enrolled_courses_count = serializers.IntegerField()
     active_courses_count = serializers.IntegerField()
     completed_courses_count = serializers.IntegerField()
+    recently_enrolled = RecentlyEnrolledCourseSerializer(many=True, read_only=True)
+    recent_invoices = StudentInvoiceSerializer(many=True, read_only=True)
+    recent_quizes = DashboardQuizAttemptSerializer(many=True, read_only=True)
 
 
 class EnrollCourseSerializer(serializers.ModelSerializer):

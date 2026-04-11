@@ -60,7 +60,7 @@ class CreateStripeCheckoutSessionView(APIView):
             amount=order.total_amount,
             payment_method="stripe",
             status="pending",
-            currency="USD",
+            currency="EUR",
         )
 
         try:
@@ -293,7 +293,7 @@ class StripeWebhookView(APIView):
             user=payment.user,
             payment_method=payment.payment_method or "stripe",
             amount=payment.amount,
-            currency=payment.currency or "USD",
+            currency=payment.currency or "EUR",
             status="paid",
             invoice_date=date.today(),
         )
@@ -450,7 +450,7 @@ class CreateStripeConnectAccountView(APIView):
             if not instructor.stripe_account_id:
                 account = stripe.Account.create(
                     type="express",
-                    country="US",  # 👉 change dynamically later
+                    country="IE",  # Ireland for Euro based accounts
                     email=user.email,
                     capabilities={
                         "transfers": {"requested": True},
@@ -720,7 +720,7 @@ class ApproveWithdrawView(APIView):
             # 1. Transfer funds from Platform balance to Instructor's Stripe Balance
             transfer = stripe.Transfer.create(
                 amount=int(withdrawal.amount * 100),
-                currency="usd",
+                currency="eur",
                 destination=stripe_account_id
             )
 
@@ -728,7 +728,7 @@ class ApproveWithdrawView(APIView):
             try:
                 payout = stripe.Payout.create(
                     amount=int(withdrawal.amount * 100),
-                    currency="usd",
+                    currency="eur",
                     stripe_account=stripe_account_id
                 )
                 stripe_payout_id = payout.id
@@ -844,7 +844,7 @@ class AffiliateCreateStripeConnectAccountView(APIView):
             if not affiliate.stripe_account_id:
                 account = stripe.Account.create(
                     type="express",
-                    country="US",  # change dynamically later
+                    country="IE",  # Ireland for Euro based accounts
                     email=user.email,
                     capabilities={
                         "transfers": {"requested": True},
@@ -1047,7 +1047,7 @@ class OrganizationCreateStripeConnectAccountView(APIView):
             if not organization.stripe_account_id:
                 account = stripe.Account.create(
                     type="express",
-                    country="US",  
+                    country="IE",  # Ireland for Euro based accounts
                     email=user.email,
                     capabilities={
                         "transfers": {"requested": True},
