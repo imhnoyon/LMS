@@ -25,6 +25,7 @@ urlpatterns = [
     #review 
     path('reviews/<int:course_id>/', CreateReviewView.as_view(), name='course-reviews'),
     path('reviews-updated/<int:review_id>/', CreateReviewView.as_view(), name='course-reviews'),
+    path('reviews-deleted/<int:review_id>/', CourseReviewDeleted.as_view(), name='course-reviews'),
     path('review-list/', ReviewListAPIView.as_view(), name='delete-review'),
     
     # quiz attempts-list
@@ -50,7 +51,6 @@ urlpatterns = [
     path("student/recordings/",StudentPurchasedCourseRecordingListView.as_view(),name="student-purchased-recordings"),
     path("student/recordings/<int:pk>/",StudentRecordingDetailView.as_view(),name="student-purchased-recording-detail"),
     
-    
-    
-    
+    # 🔹 Certificates
+    path("student/certificates/", StudentCertificateListView.as_view(), name="student-certificates"),
 ]

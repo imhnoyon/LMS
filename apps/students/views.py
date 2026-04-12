@@ -387,6 +387,10 @@ class CreateReviewView(APIView):
         )
         
         
+    
+    
+class CourseReviewDeleted(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
     def delete(self, request, review_id):
         review = get_object_or_404(Review, id=review_id)
         if review.user != request.user:
@@ -397,7 +401,7 @@ class CreateReviewView(APIView):
         review.delete()
         return APIResponse.success(
             message="Review deleted successfully.",
-            status_code=204
+            status_code=200
         )
         
         
@@ -698,4 +702,27 @@ class StudentRecordingDetailView(APIView):
             message="Recording fetched successfully.",
             data=serializer.data,
             status_code=200
+        )
+
+# 🔹 My Certificates List View
+class StudentCertificateListView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        certificates = Certificate.objects.filter(
+            enrollment__user=request.user,
+            enrollment__is_completed=True
+        ).order_by('-issue_date')
+
+        paginator = self.pagination_class()
+        paginated_certificates = paginator.paginate_queryset(certificates, request, view=self)
+
+        serializer = StudentCertificateSerializer(
+            paginated_certificates, many=True, context={'request': request}
+        )
+
+        return paginator.get_paginated_response(
+            data=serializer.data,
+            message="Certificates retrieved successfully."
         )

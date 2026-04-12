@@ -15,4 +15,8 @@ urlpatterns = [
     
     # Affiliate Profile
     path("affiliate/profile/", AffiliateProfileView.as_view(), name="affiliate-profile"),
+    path("affiliate/overview/", AffiliateOverview.as_view(), name="affiliate-overview"),
+    path("affiliate/block/<str:pk>/", AffiliateBlockview.as_view(), name="affiliate-block"),
+    path("affiliate/update-commission/<str:pk>/", UpdateAffiliateCommissionView.as_view(), name="affiliate-update-commission"),
+    path("affiliate/details/<str:pk>/", AffiliateDetailsView.as_view(), name="affiliate-details"),
 ]

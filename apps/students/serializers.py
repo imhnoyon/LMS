@@ -176,6 +176,18 @@ class LecturePlayerSerializer(serializers.ModelSerializer):
         return is_lecture_accessible(user, obj)
 
 
+class StudentQuizOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestionOption
+        fields = ['id', 'text', 'order']  
+
+class StudentQuizQuestionSerializer(serializers.ModelSerializer):
+    options = StudentQuizOptionSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Question
+        fields = ['id', 'question_type', 'text', 'order', 'options']
+
 class QuizPlayerSerializer(serializers.ModelSerializer):
     is_passed = serializers.SerializerMethodField()
     questions_count = serializers.SerializerMethodField()
@@ -421,5 +433,37 @@ class LiveRecordingVideo(serializers.ModelSerializer):
     
     
         
-        
-    
+class StudentCertificateSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source="certificate_id", read_only=True)
+    course_name = serializers.CharField(source="course_title", read_only=True)
+    date = serializers.DateField(source="issue_date", format="%d %b %Y", read_only=True)
+    marks = serializers.SerializerMethodField()
+    out_of = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Certificate
+        fields = ['id', 'course_name','student_name', 'date', 'marks', 'out_of']
+
+    def get_marks(self, obj):
+        from apps.courses.models import QuizAttempt
+        user = obj.enrollment.user
+        course = obj.enrollment.course
+        quizzes = course.sections.values_list('quizzes', flat=True).filter(quizzes__isnull=False)
+        marks = 0
+        for q_id in set(quizzes):
+            last_attempt = QuizAttempt.objects.filter(user=user, quiz_id=q_id).order_by('-submitted_at').first()
+            if last_attempt:
+                marks += last_attempt.correct_answers
+        return marks
+
+    def get_out_of(self, obj):
+        from apps.courses.models import QuizAttempt
+        user = obj.enrollment.user
+        course = obj.enrollment.course
+        quizzes = course.sections.values_list('quizzes', flat=True).filter(quizzes__isnull=False)
+        total = 0
+        for q_id in set(quizzes):
+            last_attempt = QuizAttempt.objects.filter(user=user, quiz_id=q_id).order_by('-submitted_at').first()
+            if last_attempt:
+                total += last_attempt.total_questions
+        return total

@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Q
-from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization
+from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization, IsStudent
 from .models import *
 from .serializers import *
 from utils.api_response import APIResponse
@@ -405,7 +405,7 @@ class PublishCourseView(APIView):
     
 # course list
 class CourseListView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminUser,IsStudent]
     paginator_class = CustomPagination
 
     def get(self, request):
@@ -688,4 +688,44 @@ class courseAdminReviewHistoryView(APIView):
         paginated_history = paginator.paginate_queryset(review_history, request)
         serializer = courseReviewHistorySerializer(paginated_history, many=True)
         
+        return paginator.get_paginated_response(serializer.data)
+    
+    
+    
+    
+    
+class CourseHomeListView(APIView):
+    permission_classes = [IsAuthenticated,IsStudent]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        status_param = request.query_params.get('status')
+
+        courses = Course.objects.all().order_by('-created_at')[:10]
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search) |
+                Q(language__icontains=search) |
+                Q(level__icontains=search)
+            )
+
+        if category:
+            courses = courses.filter(category__name__iexact=category)
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
+
+        paginator = self.paginator_class()
+        paginated_courses = paginator.paginate_queryset(courses, request)
+
+        serializer = CourseDetailSerializer(
+            paginated_courses,
+            many=True,
+            context={"request": request}
+        )
+
         return paginator.get_paginated_response(serializer.data)

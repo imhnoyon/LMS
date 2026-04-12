@@ -170,3 +170,26 @@ class AffiliateProfileSerializers(serializers.ModelSerializer):
         model = User
         fields = ["id","name","email","phone","avatar","is_verified","created_at","updated_at",]
         read_only_fields = ["id","email","is_verified","created_at","updated_at",]
+        
+        
+# Serializer for updating affiliate commission percentage    
+class AffiliatePercentageUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Affiliate
+        fields = ["commission_rate"]
+
+    def validate_commission_rate(self, value):
+        if value > 1:
+            return value / 100
+        return value
+        
+        
+        
+class AffiliateDetailsSerializer(serializers.ModelSerializer):
+    user_id = serializers.UUIDField(source="user.id", read_only=True)
+    name = serializers.CharField(source="user.name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = Affiliate
+        fields = ["id","user_id","name","email","affiliate_type", "iban","tax_id","address","commission_rate","total_earned","total_paid","total_payable","status","created_at","updated_at",]

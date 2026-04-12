@@ -7,7 +7,7 @@ from apps.courses.models import Course
 from apps.orders.models import Order, OrderItem
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Affiliate, AffiliateCourseLink, AffiliateCommission
-from .serializers import AffiliateCourseListSerializer, AffiliateListSerializer, AffiliateCommissionHistorySerializer, AffiliateProfileSerializers
+from .serializers import AffiliateCourseListSerializer, AffiliateDetailsSerializer, AffiliateListSerializer, AffiliateCommissionHistorySerializer, AffiliatePercentageUpdateSerializer, AffiliateProfileSerializers
 from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from .serializers import AffiliateStatusUpdateSerializer
@@ -482,6 +482,187 @@ class AffiliateProfileView(APIView):
 
         return APIResponse.success(
             message="Affiliate profile updated successfully.",
+            data=serializer.data,
+            status_code=200
+        )
+        
+        
+        
+class AffiliateOverview(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        from apps.affiliates.models import Affiliate, AffiliateCommission
+        from django.utils import timezone
+        
+        # 1. Top Metrics calculation
+        total_affiliates = Affiliate.objects.count()
+        active_affiliates = Affiliate.objects.filter(status="active").count()
+        
+        total_commission_generated = float(Affiliate.objects.aggregate(total=Sum("total_earned"))["total"] or 0)
+        total_commission_paid = float(Affiliate.objects.aggregate(total=Sum("total_paid"))["total"] or 0)
+        pending_payouts = total_commission_generated - total_commission_paid
+        
+        # Calculate Total Sales derived from affiliate referrals
+        total_sales = float(AffiliateCommission.objects.exclude(order__isnull=True).values('order').distinct().aggregate(total=Sum('order__total_amount'))["total"] or 0)
+
+        # 2. Earnings Over Time (Last 6 Months Chart)
+        today = timezone.now().date()
+        chart_labels = []
+        chart_sales = []
+        chart_commission_paid = []
+        
+        for i in range(5, -1, -1):
+            target_month = today.month - i
+            target_year = today.year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            
+            chart_labels.append(timezone.datetime(target_year, target_month, 1).strftime("%b"))
+            
+            # Fetch Monthly Sales resulting from affiliate recommendations
+            monthly_sales = float(AffiliateCommission.objects.filter(
+                created_at__year=target_year, created_at__month=target_month, order__isnull=False
+            ).values('order').distinct().aggregate(total=Sum('order__total_amount'))["total"] or 0)
+            chart_sales.append(monthly_sales)
+            
+            # Fetch Monthly Commissions generated/paid (we'll query total earned during that month)
+            monthly_comm = float(AffiliateCommission.objects.filter(
+                created_at__year=target_year, created_at__month=target_month
+            ).aggregate(total=Sum('commission_rate'))["total"] or 0)
+            chart_commission_paid.append(monthly_comm)
+
+        earnings_over_time = {
+            "labels": chart_labels,
+            "total_sales": chart_sales,
+            "commission_paid": chart_commission_paid
+        }
+
+        # 3. Top Performing Affiliates
+        top_affiliates_query = Affiliate.objects.annotate(
+            sales_count=Count('commissions_records')
+        ).order_by('-total_earned')[:4]
+        
+        top_performers = []
+        for index, aff in enumerate(top_affiliates_query):
+            top_performers.append({
+                "rank": index + 1,
+                "name": aff.user.name or "Unknown",
+                "sales": getattr(aff, 'sales_count', 0),
+                "total_earned": float(aff.total_earned)
+            })
+
+        # 4. Affiliates Management Table
+        status_filter = request.query_params.get("status")
+        type_filter = request.query_params.get("type")
+
+        affiliates_query = Affiliate.objects.select_related('user').all()
+
+        if status_filter and status_filter.lower() not in ["all", "all status", ""]:
+            affiliates_query = affiliates_query.filter(status__iexact=status_filter)
+
+        if type_filter and type_filter.lower() not in ["all", "all types", ""]:
+            # 'type_filter' might be partial words like 'external' or 'territorial'
+            affiliates_query = affiliates_query.filter(affiliate_type__icontains=type_filter)
+
+        # Apply pagination to the Affiliates Management Queryset
+        paginator = self.pagination_class()
+        paginated_affiliates = paginator.paginate_queryset(affiliates_query.order_by('-created_at'), request)
+
+        affiliates_list = []
+        for aff in paginated_affiliates:
+            # Clean up the type string from Affiliate type to match UI layout ('partner', 'external', 'territorial')
+            aff_type = aff.get_affiliate_type_display().split()[0].lower() if aff.get_affiliate_type_display() else "partner"
+            
+            # Safely format the commission rate to a percentage (e.g., 0.20 -> 20%)
+            commission_percent = int(aff.commission_rate * 100) if aff.commission_rate <= 1 else int(aff.commission_rate)
+            
+            affiliates_list.append({
+                "name": aff.user.name or "Unknown",
+                "email": aff.user.email,
+                "type": aff_type,
+                "status": aff.status.upper(),
+                "code": aff.id,
+                "total_earned": float(aff.total_earned),
+                "commission_percent": f"{commission_percent}%",
+                "created_date": aff.created_at.strftime("%m/%d/%Y")
+            })
+
+        # Return the entire dashboard wrapped inside the Paginated response format
+        return paginator.get_paginated_response(
+            data={
+                "top_metrics": {
+                    "total_affiliates": total_affiliates,
+                    "active_affiliates": active_affiliates,
+                    "total_affiliate_sales": f"${total_sales:,.2f}",
+                    "total_commission_paid": f"${total_commission_paid:,.2f}",
+                    "total_commission_generated": f"${total_commission_generated:,.2f}",
+                    "pending_payouts": f"${pending_payouts:,.2f}"
+                },
+                "earnings_over_time": earnings_over_time,
+                "top_performing_affiliates": top_performers,
+                "affiliates_management": affiliates_list
+            },
+            message="Affiliate overview retrieved successfully."
+        )
+        
+        
+class AffiliateBlockview(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def post(self, request, pk):
+        affiliate = get_object_or_404(Affiliate, pk=pk)
+        
+         # Toggle logic
+        if affiliate.status == "suspended":
+            affiliate.status = "active"
+            message = "Affiliate activated successfully."
+        else:
+            affiliate.status = "suspended"
+            message = "Affiliate suspended successfully."
+        
+        affiliate.save(update_fields=["status"])
+        
+        return APIResponse.success(
+            message=message,
+            data={},
+            status_code=200
+        )
+        
+        
+class UpdateAffiliateCommissionView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def patch(self, request, pk):
+        affiliate = get_object_or_404(Affiliate, pk=pk)
+        serializer = AffiliatePercentageUpdateSerializer(affiliate,data=request.data, partial=True, context={"request": request})
+        
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Affiliate update failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+        
+        serializer.save()
+        return APIResponse.success(
+            message="Affiliate updated successfully.",
+            data=serializer.data,
+            status_code=200
+        )
+        
+        
+class AffiliateDetailsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        affiliate = get_object_or_404(Affiliate, pk=pk)
+        serializer = AffiliateDetailsSerializer(affiliate, context={"request": request})
+        return APIResponse.success(
+            message="Affiliate details retrieved successfully.",
             data=serializer.data,
             status_code=200
         )
