@@ -15,7 +15,7 @@ class CourseBasicSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             'id', 'title', 'subtitle', 'category', 'topic',
-            'language', 'level', 'price', 'discount_price',
+            'language', 'level', 'price', 'discount_price','duration',
             'coupon_code', 'expiry_type', 'status', 'organization'
         ]
         read_only_fields = ['id', 'status', 'organization']
@@ -276,7 +276,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Course
-        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','lectures','quizes','instructor','advance_info', 'outcomes','requirements','sections'] 
+        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating','duration', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','lectures','quizes','instructor','advance_info', 'outcomes','requirements','sections'] 
         
 # Course details serializers ended here
 

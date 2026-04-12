@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Q
+from utils.helper_functions import parse_duration_to_days
 from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization, IsStudent
 from .models import *
 from .serializers import *
@@ -35,7 +36,7 @@ def get_course_with_permission(course_id, user):
 
 # Create categories by admin (for now, we can create them via admin panel)
 class CategoryAPIView(APIView):
-    permission_classes = [IsAdminUser, IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     pagination_class = CustomPagination
 
     def get(self, request):
@@ -405,7 +406,7 @@ class PublishCourseView(APIView):
     
 # course list
 class CourseListView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser,IsStudent]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     paginator_class = CustomPagination
 
     def get(self, request):
@@ -496,9 +497,9 @@ class courseDetail(APIView):
             )
             
         if status_value == "accepted":
-            course.status = "Accepted"
+            course.status = "accepted"
         elif status_value == "rejected":
-            course.status = "Rejected"
+            course.status = "rejected"
         course.save()
         
         CourseReviewHistory.objects.create(
@@ -695,16 +696,87 @@ class courseAdminReviewHistoryView(APIView):
     
     
 class CourseHomeListView(APIView):
-    permission_classes = [IsAuthenticated,IsStudent]
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        from django.db.models import Count, Avg
+
+        # Pre-annotate the average rating via the database since `Course.rating()` is a Python method and cannot be directly sorted/filtered by the ORM
+        courses_query = Course.objects.filter(status='accepted').annotate(
+            avg_rating=Avg('reviews__rating')
+        )
+
+        # 1. Trending Courses (Based on most enrollments, fallback to highest average rating)
+        trending = courses_query.annotate(
+            enr_count=Count('enrollments')
+        ).order_by('-enr_count', '-avg_rating')[:10]
+
+        # 2. Featured Courses (Highly rated courses, or randomize if not enough data)
+        featured = courses_query.filter(avg_rating__gte=4.0).order_by('?')[:10]
+        if not featured.exists():
+            featured = courses_query.order_by('?')[:10]
+
+        # 3. Most Requested Courses (Newest/Latest additions)
+        most_requested = courses_query.order_by('-created_at')[:10]
+
+        # Group data exactly as required by the 3 horizontal UI carousels
+        data = {
+            "trending_courses": CourseDetailSerializer(trending, many=True, context={"request": request}).data,
+            "featured_courses": CourseDetailSerializer(featured, many=True, context={"request": request}).data,
+            "most_requested_courses": CourseDetailSerializer(most_requested, many=True, context={"request": request}).data,
+        }
+
+        return APIResponse.success(
+            message="Home page courses retrieved successfully.",
+            data=data,
+            status_code=200
+        )
+        
+        
+# Student Courses pages        
+class CoursesHomeView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
     paginator_class = CustomPagination
 
     def get(self, request):
         search = request.query_params.get('search')
         category = request.query_params.get('category')
         status_param = request.query_params.get('status')
+        ratings= request.query_params.get('ratings')
+        sort = request.query_params.get("sort")
+        
+        min_price = request.query_params.get("min_price")
+        max_price = request.query_params.get("max_price")
+        
+        min_duration = request.query_params.get("min_duration")
+        max_duration = request.query_params.get("max_duration")
+        
 
-        courses = Course.objects.all().order_by('-created_at')[:10]
+        courses = Course.objects.all().order_by('-id')
+        
+        if min_price:
+            courses = courses.filter(price__gte=min_price)
 
+        if max_price:
+            courses = courses.filter(price__lte=max_price)
+            
+        from django.db.models import Count, Avg
+
+        if sort == "trending":
+            courses = courses.annotate(total_enrollments=Count('enrollments')).order_by('-total_enrollments')
+
+        elif sort == "high_rated":
+            courses = courses.annotate(average_rating=Avg('reviews__rating')).order_by('-average_rating')  
+
+        elif sort == "newest":
+            courses = courses.order_by('-created_at')
+
+        elif sort == "relevance":
+            courses = courses.order_by('-id')  
+
+        else:
+            courses = courses.order_by('-created_at') 
+            
         if search:
             courses = courses.filter(
                 Q(title__icontains=search) |
@@ -718,6 +790,25 @@ class CourseHomeListView(APIView):
             courses = courses.filter(category__name__iexact=category)
         if status_param:
             courses = courses.filter(status__iexact=status_param)
+            
+        if ratings:
+            courses = courses.filter(reviews__rating__gte=ratings).distinct()
+            
+        # Helper function to convert varied textual durations into simple days
+        from utils.helper_functions import parse_duration_to_days
+        
+
+        if min_duration or max_duration:
+            min_d_val = parse_duration_to_days(min_duration) if min_duration else 0
+            max_d_val = parse_duration_to_days(max_duration) if max_duration else float('inf')
+            
+            # Since the db column is textual ("5 weeks"), we logically evaluate and filter the records in memory
+            valid_courses = []
+            for course in courses:
+                course_d_val = parse_duration_to_days(course.duration)
+                if min_d_val <= course_d_val <= max_d_val:
+                    valid_courses.append(course)
+            courses = valid_courses
 
         paginator = self.paginator_class()
         paginated_courses = paginator.paginate_queryset(courses, request)

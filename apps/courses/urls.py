@@ -38,4 +38,9 @@ urlpatterns = [
     path('live-classes/<int:course_id>/', views.LiveClassManageView.as_view(), name='live-class-manage'),
     
     
+    # Student Home pages
+    path('home/courses/', views.CourseHomeListView.as_view(), name='student-home-courses'),
+    path('home/courses/list/', views.CoursesHomeView.as_view(), name='student-home-courses'),
+    
+    
 ]

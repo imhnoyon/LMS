@@ -62,6 +62,7 @@ class Course(models.Model):
     coupon_code = models.CharField(max_length=50, null=True, blank=True)
     expiry_type    = models.CharField(max_length=20, choices=EXPIRY_DURATION_CHOICES, default='1_week')
     expiry_date = models.DateTimeField(null=True, blank=True)
+    duration= models.CharField(max_length=50, null=True, blank=True)
     status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
