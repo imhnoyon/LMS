@@ -1,0 +1,1 @@
+stripe listen --forward-to http://10.10.12.22:8002/v1/payments/stripe/webhook/
