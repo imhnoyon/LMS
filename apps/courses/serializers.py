@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.orders.models import WishlistItem
 from .models import *
 from apps.instructors.models import Instructor
 import json
@@ -273,12 +275,37 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     modules = serializers.IntegerField(source='sections.count', read_only=True)
     lectures = serializers.IntegerField(read_only=True)
     quizes = serializers.IntegerField(source='quizzes_count', read_only=True)
+    is_wishlisted = serializers.SerializerMethodField()
+    reviews_count = serializers.IntegerField(source='reviews.count', read_only=True)
+    description = serializers.CharField(source='advance_info.description', read_only=True)
+    
+    related_courses = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
-        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating','duration', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','lectures','quizes','instructor','advance_info', 'outcomes','requirements','sections'] 
+        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language','description', 'level', 'price','rating','duration', 'discount_price', 'coupon_code','is_wishlisted', 'expiry_type','rating','reviews_count', 'status','modules','lectures','quizes','instructor','advance_info', 'outcomes','requirements','sections', 'related_courses'] 
+        
+    def get_is_wishlisted(self, obj):
+        user = self.context.get('request').user
+        if user.is_authenticated:
+            return WishlistItem.objects.filter(wishlist__user=user, course=obj).exists()
+        return False
+    
+    def get_related_courses(self, obj):
+        related = Course.objects.filter(
+            category=obj.category
+        ).exclude(id=obj.id)[:5]
+
+        return [
+            {
+                "id": course.id,
+                "title": course.title
+            }
+            for course in related
+        ]
         
 # Course details serializers ended here
+
 
 # Live Class Serializers
 class LiveClassSerializer(serializers.ModelSerializer):
@@ -331,3 +358,18 @@ class courseReviewHistorySerializer(serializers.ModelSerializer):
         model = CourseReviewHistory
         fields = ['id', 'course', 'course_title', 'instructor_name', 'reviewer_name', 'status', 'reviewed_at']
         read_only_fields = ['id', 'course', 'user', 'status', 'reviewed_at']
+        
+        
+        
+class instructorSerializers(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='user.avatar', read_only=True)
+    class Meta:
+        model = Instructor
+        fields = ['id', 'Instructor_name', 'title','biography','avatar']
+        
+        
+    def get_avatar(self, obj):
+        if obj.user.avatar:
+            return obj.user.avatar.url
+        return None
+    

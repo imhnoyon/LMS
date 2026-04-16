@@ -487,6 +487,7 @@ class courseDetail(APIView):
         serializer = CourseDetailSerializer(course,context={"request": request})
         return APIResponse.success(data=serializer.data)
     
+    
     def patch(self, request, pk):
         course = get_object_or_404(Course, pk=pk)
         status_value = request.data.get("status")
@@ -696,7 +697,6 @@ class courseAdminReviewHistoryView(APIView):
     
     
 class CourseHomeListView(APIView):
-    permission_classes = [IsAuthenticated, IsStudent]
 
     def get(self, request):
         from django.db.models import Count, Avg
@@ -718,12 +718,15 @@ class CourseHomeListView(APIView):
 
         # 3. Most Requested Courses (Newest/Latest additions)
         most_requested = courses_query.order_by('-created_at')[:10]
-
+        
+        instructors = Instructor.objects.all().select_related('user').distinct()
+        instructor_serializer = instructorSerializers(instructors, many=True, context={"request": request})
         # Group data exactly as required by the 3 horizontal UI carousels
         data = {
             "trending_courses": CourseDetailSerializer(trending, many=True, context={"request": request}).data,
             "featured_courses": CourseDetailSerializer(featured, many=True, context={"request": request}).data,
             "most_requested_courses": CourseDetailSerializer(most_requested, many=True, context={"request": request}).data,
+            "instructors": instructor_serializer.data
         }
 
         return APIResponse.success(
@@ -735,7 +738,6 @@ class CourseHomeListView(APIView):
         
 # Student Courses pages        
 class CoursesHomeView(APIView):
-    permission_classes = [IsAuthenticated, IsStudent]
     paginator_class = CustomPagination
 
     def get(self, request):

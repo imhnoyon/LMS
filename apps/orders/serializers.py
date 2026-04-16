@@ -19,6 +19,9 @@ class CartItemDetailSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source='course.title', read_only=True)
     course_price = serializers.DecimalField(source='course.price', max_digits=10, decimal_places=2, read_only=True)
     course_discount_price = serializers.DecimalField(source='course.discount_price', max_digits=10, decimal_places=2, read_only=True)
+    thumbnail = serializers.ImageField(source='course.advance_info.thumbnail', read_only=True)
+    rating = serializers.DecimalField(source='course.rating', max_digits=10, decimal_places=2, read_only=True)
+    reviews_count = serializers.IntegerField(source='course.reviews_count', read_only=True)
 
     class Meta:
         model = CartItems
@@ -29,6 +32,9 @@ class CartItemDetailSerializer(serializers.ModelSerializer):
             'course_price',
             'course_discount_price',
             'course_amount',
+            'thumbnail',
+            'rating',
+            'reviews_count',
             'created_at',
         ]
         

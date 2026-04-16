@@ -77,7 +77,7 @@ class CartListView(APIView):
         cart, _ = Cart.objects.get_or_create(user=request.user)
         cart_items = cart.cart_items.select_related("course").order_by("-id")
 
-        serializer = CartItemDetailSerializer(cart_items, many=True)
+        serializer = CartItemDetailSerializer(cart_items, many=True, context={"request": request})
 
         subtotal = sum(item.course_amount for item in cart_items)
 
@@ -291,6 +291,10 @@ class AddToWishlistView(APIView):
             )
 
         WishlistItem.objects.create(wishlist=wishlist, course=course)
+        is_wishlist = True
+        wishlist.is_wishlist = is_wishlist
+        wishlist.save(update_fields=['is_wishlist'])
+
 
         return APIResponse.success(
             message="Course added to wishlist successfully.",
@@ -338,6 +342,9 @@ class WishlistViewAPIView(APIView):
             )
 
         WishlistItem.objects.filter(wishlist=wishlist, course=course).delete()
+        is_wishlist = False
+        wishlist.is_wishlist = is_wishlist
+        wishlist.save(update_fields=['is_wishlist'])
 
         return APIResponse.success(
             message="Course removed from wishlist successfully.",
