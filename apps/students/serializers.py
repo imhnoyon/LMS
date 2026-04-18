@@ -242,25 +242,31 @@ class ExamSectionSerializer(serializers.ModelSerializer):
         model = Section
         fields = ["id", "name", "lectures"]
 
+
+
+           
 class ExamAssessmentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
     instructor = serializers.CharField(source="course.instructor.name", read_only=True)
     
     # Hierarchy
-    sections = ExamSectionSerializer(source="course.sections", many=True, read_only=True)
+    # sections = ExamSectionSerializer(source="course.sections", many=True, read_only=True)
     
     # Progress Metrics
     section_count = serializers.SerializerMethodField()
     lecture_count = serializers.SerializerMethodField()
     completed_lecture_count = serializers.SerializerMethodField()
-
+    completion_percentage = serializers.SerializerMethodField()
+    
+    # Overall Assessment Status
+    
     class Meta:
         model = Enrollment
         fields = [
             "id", "course", "course_title", "course_thumbnail", "instructor",
-            "is_completed", "enrolled_at", "sections",
-            "section_count", "lecture_count", "completed_lecture_count"
+            "is_completed","section_count", "lecture_count", "completed_lecture_count", "completion_percentage", "enrolled_at", 
+            
         ]
 
     def get_section_count(self, obj):
@@ -275,6 +281,13 @@ class ExamAssessmentSerializer(serializers.ModelSerializer):
             lecture__section__course=obj.course, 
             is_completed=True
         ).count()
+
+    def get_completion_percentage(self, obj):
+        total = self.get_lecture_count(obj)
+        if total == 0:
+            return 0.0
+        completed = self.get_completed_lecture_count(obj)
+        return round((completed / total) * 100, 2)
 
 
 class CertificateSerializer(serializers.ModelSerializer):
@@ -468,3 +481,25 @@ class StudentCertificateSerializer(serializers.ModelSerializer):
             if last_attempt:
                 total += last_attempt.total_questions
         return total
+    
+    
+    
+    
+    
+# lecture tracking serializer for student dashboard and course player progress tracking
+
+class coursemodelserializer(serializers.ModelSerializer):
+    model_name = serializers.CharField(source="lecture.section.name", read_only=True)
+    lesson_name = serializers.CharField(source="lecture.name", read_only=True)
+    course_name = serializers.CharField(source="lecture.section.course.title", read_only=True)
+    course_id = serializers.IntegerField(source="lecture.section.course.id", read_only=True)
+    is_completed = serializers.BooleanField()
+
+    class Meta:
+        model = LecturesProgress
+        fields = ["id",'course_id','course_name', "model_name", "lesson_name", "is_completed",'completed_at']
+        
+    def to_representation(self, instance):  
+        representation = super().to_representation(instance)
+        representation['is_completed'] = instance.is_completed
+        return representation

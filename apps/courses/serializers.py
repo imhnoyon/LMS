@@ -174,8 +174,8 @@ class CourseAdvanceInfoSerializer(serializers.ModelSerializer):
 class LectureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecture
-        fields = ['id', 'name', 'order', 'description', 'video_file', 'LectureAttachment', 'LectureNoteFile',]
-        
+        fields = ['id', 'name', 'order', 'description', 'video_file', 'LectureAttachment', 'LectureNoteFile','lecture_notes']
+           
     def create(self, validated_data):
         section = validated_data.get('section')
 

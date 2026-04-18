@@ -300,9 +300,13 @@ class ExamAssessmentAPIView(APIView):
         enrollments = Enrollment.objects.filter(user=request.user)
 
         # Filters
+        course_title = request.query_params.get("course_title")
         is_active = request.query_params.get("is_active")
         is_completed = request.query_params.get("is_completed")
         is_started = request.query_params.get("is_started")
+
+        if course_title:
+            enrollments = enrollments.filter(course__title__icontains=course_title)
 
         if is_active is not None:
             enrollments = enrollments.filter(is_active=is_active.lower() == "true")
@@ -313,17 +317,89 @@ class ExamAssessmentAPIView(APIView):
         if is_started is not None:
             enrollments = enrollments.filter(is_started=is_started.lower() == "true")
 
+        course_ids = enrollments.values_list("course_id", flat=True)
+
+        total_lectures_all_courses = Lecture.objects.filter(
+            section__course_id__in=course_ids
+        ).count()
+        completed_lectures_all_courses = LecturesProgress.objects.filter(
+            user=request.user,
+            is_completed=True,
+            lecture__section__course_id__in=course_ids
+        ).count()
+
+        average_completion_percentage = 0.0
+        if total_lectures_all_courses > 0:
+            average_completion_percentage = round(
+                (completed_lectures_all_courses / total_lectures_all_courses) * 100,
+                2
+            )
+
+        total_completed_courses = enrollments.filter(is_completed=True).count()
+        total_certificated_courses = Certificate.objects.filter(
+            enrollment__user=request.user,
+            enrollment__course_id__in=course_ids,
+        ).count()
+
+        completed_quiz_ids = set()
+        quiz_attempts = QuizAttempt.objects.filter(
+            user=request.user,
+            course_id__in=course_ids,
+        ).select_related("quiz").order_by("quiz_id", "-submitted_at")
+
+        seen_quiz_ids = set()
+        for attempt in quiz_attempts:
+            if attempt.quiz_id in seen_quiz_ids:
+                continue
+            seen_quiz_ids.add(attempt.quiz_id)
+            if attempt.score_percentage >= attempt.quiz.passing_score:
+                completed_quiz_ids.add(attempt.quiz_id)
+
         enrollments = enrollments.order_by("-id")
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(enrollments, request, view=self)
         serializer = ExamAssessmentSerializer(page, many=True, context={"request": request})
 
-        return paginator.get_paginated_response(
+        response = paginator.get_paginated_response(
             serializer.data,
             message="Exam assessment courses retrieved successfully."
         )
+        response.data["average_completion_percentage"] = average_completion_percentage
+        response.data["total_completed_courses"] = total_completed_courses
+        response.data["total_certificated_courses"] = total_certificated_courses
+        response.data["total_completed_quizzes"] = len(completed_quiz_ids)
+        return response
 
+
+
+class CourseLectureTrackingProgressAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        course_name = request.query_params.get("course_name")
+
+        progress_qs = LecturesProgress.objects.filter(user=user)\
+            .select_related('lecture', 'lecture__section__course')\
+            .order_by('-id')[:10]  # Limit to first 10 results
+
+        #  course name filter
+        if course_name:
+            progress_qs = progress_qs.filter(
+                lecture__section__course__title__icontains=course_name
+            )
+
+        serializer = coursemodelserializer(
+            progress_qs,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            data=serializer.data,
+            message="Course progress retrieved successfully"
+        )
     
 # Course Review APIView
 class CreateReviewView(APIView):

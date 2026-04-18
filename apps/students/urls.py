@@ -20,6 +20,7 @@ urlpatterns = [
     path('enroll-courses/', EnrollCourseAPIView.as_view(), name='enroll-course'),
     
     path('exam-assessments-courses/', ExamAssessmentAPIView.as_view(), name='enroll-course'),
+    path("lecture-tracking/", CourseLectureTrackingProgressAPIView.as_view(), name="lecture-tracking"),
     path('course-completed/<int:course_id>/', CheckCourseCompletionView.as_view(), name='check-course-completion'),
     
     #review 

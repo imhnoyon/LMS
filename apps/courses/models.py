@@ -182,6 +182,7 @@ class Lecture(models.Model):
     video_file= models.FileField(upload_to='lectures/videos/', null=True, blank=True)
     LectureAttachment = models.FileField(upload_to='lectures/attachments/', null=True, blank=True)
     LectureNoteFile= models.FileField(upload_to='lectures/notes/', null=True, blank=True)
+    lecture_notes = models.TextField(blank=True)
     
     class Meta:
         ordering = ['order']
