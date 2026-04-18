@@ -207,7 +207,7 @@ class InstructorProfileUpdateView(APIView):
             context={"request": request}
         )
         return APIResponse.success(
-            message="Instructor profile retrieved successfully.",
+            message="Instructor profile retrieved.",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
@@ -219,7 +219,7 @@ class InstructorProfileUpdateView(APIView):
             instructor,
             data=request.data,
             partial=True,
-            context={"request": request}
+            context={"request": request}   
         )
 
         if serializer.is_valid():
