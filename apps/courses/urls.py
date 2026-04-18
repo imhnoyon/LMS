@@ -42,5 +42,7 @@ urlpatterns = [
     path('home/courses/', views.CourseHomeListView.as_view(), name='student-home-courses'),
     path('home/courses/list/', views.CoursesHomeView.as_view(), name='student-home-courses'),
     
+    path('course/info/', views.CourseInformationAPIView.as_view(), name='course-information'),
+    
     
 ]

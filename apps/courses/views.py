@@ -823,3 +823,22 @@ class CoursesHomeView(APIView):
         )
 
         return paginator.get_paginated_response(serializer.data)
+    
+    
+
+class CourseInformationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        courses = Course.objects.all().order_by('-created_at')
+
+        serializer = courseInformationserializer(
+            courses,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            data= serializer.data,
+            message="Course list retrieved successfully"
+        )

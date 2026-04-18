@@ -373,3 +373,9 @@ class instructorSerializers(serializers.ModelSerializer):
             return obj.user.avatar.url
         return None
     
+    
+    
+class courseInformationserializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'subtitle']
