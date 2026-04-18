@@ -160,6 +160,7 @@ class EnrollCourseSerializer(serializers.ModelSerializer):
 
 
 class LecturePlayerSerializer(serializers.ModelSerializer):
+    note_file = serializers.FileField(source="LectureNoteFile", read_only=True)
     is_completed = serializers.SerializerMethodField()
     is_accessible = serializers.SerializerMethodField()
 

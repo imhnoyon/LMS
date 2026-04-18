@@ -36,26 +36,27 @@ def get_course_with_permission(course_id, user):
 
 # Create categories by admin (for now, we can create them via admin panel)
 class CategoryAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    pagination_class = CustomPagination
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         search = request.query_params.get('search')
-        
+
         categories = Category.objects.all().order_by('-created_at')
+
         if search:
             categories = categories.filter(
                 Q(name__icontains=search) |
                 Q(slug__icontains=search)
             )
 
-            
-        paginator = self.pagination_class()
-        paginated_categories = paginator.paginate_queryset(categories, request, view=self)
-        serializer = CategorySerializer(paginated_categories, many=True, context={"request": request})
+        serializer = CategorySerializer(
+            categories,   
+            many=True,
+            context={"request": request}
+        )
 
-        return paginator.get_paginated_response(
-            serializer.data,
+        return APIResponse.success(
+            data=serializer.data,
             message="Categories retrieved successfully."
         )
         
