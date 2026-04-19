@@ -255,6 +255,7 @@ class TrueFalseAnswer(models.Model):
 
 class Comment(models.Model):
     course     = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='comments')
+    lecture   = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='comments', null=True, blank=True)
     user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_comments')
     parent     = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
     text       = models.TextField()
@@ -263,8 +264,8 @@ class Comment(models.Model):
 
     def __str__(self):
         if self.parent:
-            return f"Reply by {self.user.username} on {self.course.title}"
-        return f"Comment by {self.user.username} on {self.course.title}"
+            return f"Reply by {self.user.full_name} on {self.lecture.name}"
+        return f"Comment by {self.user.full_name} on {self.lecture.name}"
 
 
 class Review(models.Model):
@@ -279,7 +280,7 @@ class Review(models.Model):
         unique_together = ('course', 'user')
 
     def __str__(self):
-        return f"Review by {self.user.name} - {self.rating} Stars"
+        return f"Review by {self.user.full_name} - {self.rating} Stars"
 
 
 class LiveClass(models.Model):

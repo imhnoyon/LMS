@@ -105,6 +105,8 @@ class CoursePlayerView(APIView):
                 "description": current_lecture.description,
                 "video_file": request.build_absolute_uri(current_lecture.video_file.url) if current_lecture.video_file else None,
                 "note_file": request.build_absolute_uri(current_lecture.LectureNoteFile.url) if current_lecture.LectureNoteFile else None,
+                "attachment_file": request.build_absolute_uri(current_lecture.LectureAttachment.url) if current_lecture.LectureAttachment else None,
+                "lecture_notes": current_lecture.lecture_notes,
             },
             "next_lecture": {
                 "id": next_content.id,

@@ -842,3 +842,47 @@ class CourseInformationAPIView(APIView):
             data= serializer.data,
             message="Course list retrieved successfully"
         )
+        
+        
+        
+class CommentLectureAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 🔹 GET: list comments (lecture wise)
+    def get(self, request, lecture_id):
+        comments = Comment.objects.filter(
+            lecture_id=lecture_id,
+            parent__isnull=True   # only top-level comments
+        ).select_related('user').prefetch_related('replies').order_by('-created_at')
+
+        serializer = CommentLectureSerializer(comments, many=True)
+
+        return APIResponse.success(
+            data={"comments": serializer.data},
+            message="Comments retrieved successfully"
+        )
+
+    # 🔹 POST: create comment / reply
+    def post(self, request):
+        user = request.user
+
+        lecture_id = request.data.get("lecture")
+        text = request.data.get("text")
+        parent_id = request.data.get("parent")
+
+        lecture = get_object_or_404(Lecture, pk=lecture_id)
+
+        comment = Comment.objects.create(
+            course=lecture.section.course,
+            lecture_id=lecture_id,
+            user=user,
+            text=text,
+            parent_id=parent_id if parent_id else None
+        )
+
+        serializer = CommentLectureSerializer(comment)
+
+        return APIResponse.success(
+            data=serializer.data,
+            message="Comment added successfully"
+        )
