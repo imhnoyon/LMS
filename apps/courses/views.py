@@ -886,3 +886,24 @@ class CommentLectureAPIView(APIView):
             data=serializer.data,
             message="Comment added successfully"
         )
+        
+        
+        
+        
+class MarkLiveClassPresentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, id):
+        obj = get_object_or_404(LiveClass, id=id)
+
+        LiveClass.objects.update(is_present=False)
+        obj.is_present = True
+        obj.save()
+
+        return APIResponse.success(
+            data={
+                "message": "LiveClass marked as present successfully",
+                "id": obj.id,
+                "is_present": obj.is_present
+            }
+        )

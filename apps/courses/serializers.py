@@ -319,7 +319,7 @@ class LiveClassSerializer(serializers.ModelSerializer):
         model = LiveClass
         fields = [
             'id', 'title', 'instructor', 'instructor_name', 'course', 'course_title',
-            'topic', 'scheduled_date', 'scheduled_time',
+            'topic', 'scheduled_date', 'scheduled_time','is_present',
             'platform', 'class_link', 'is_recorded',  'created_at'
         ]
         read_only_fields = ['id', 'instructor', 'course', 'created_at']

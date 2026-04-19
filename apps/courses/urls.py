@@ -36,6 +36,7 @@ urlpatterns = [
     # Live Classes
     path('live-classes/stats/', views.InstructorLiveClassStatsView.as_view(), name='live-class-stats'),
     path('live-classes/<int:course_id>/', views.LiveClassManageView.as_view(), name='live-class-manage'),
+    path('joint-class/<int:id>/', views.MarkLiveClassPresentAPIView.as_view(), name='live-class-manage'),
     
     
     # Student Home pages

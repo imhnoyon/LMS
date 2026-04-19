@@ -300,6 +300,7 @@ class LiveClass(models.Model):
     class_link       = models.URLField()
     is_recorded      = models.BooleanField(default=False)
     recording_link   = models.URLField(blank=True, null=True)
+    is_present  = models.BooleanField(default=False)
     created_at       = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
