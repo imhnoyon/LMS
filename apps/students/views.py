@@ -180,10 +180,12 @@ class StudentQuizView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, quiz_id):
         quiz = get_object_or_404(Quiz.objects.prefetch_related("questions__options"), id=quiz_id)
+        is_completed = QuizAttempt.objects.filter(user=request.user, quiz=quiz).exists()
         return APIResponse.success(data={
             "title": quiz.title, "description": quiz.description,
             "time_limit": quiz.time_limit_minutes,
-            "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data
+            "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data,
+            "is_completed": is_completed
         })
         
 
@@ -211,8 +213,19 @@ class QuizSubmissionView(APIView):
             course=quiz.section.course if quiz.section else quiz.lecture.section.course
         )
 
+        wrong_count = max(total_q - correct_count, 0)
+        score_pct = round(score_pct, 2)
+
         return APIResponse.success(data={
-            "score": score_pct, "passed": score_pct >= quiz.passing_score
+            "quiz_id": quiz.id,
+            "quiz_title": quiz.title,
+            "score": score_pct,
+            "completion_percentage": score_pct,
+            "total_questions": total_q,
+            "correct_answers": correct_count,
+            "wrong_answers": wrong_count,
+            "passed": score_pct >= quiz.passing_score,
+            "is_completed": True
         })
 
 

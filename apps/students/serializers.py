@@ -192,10 +192,11 @@ class StudentQuizQuestionSerializer(serializers.ModelSerializer):
 class QuizPlayerSerializer(serializers.ModelSerializer):
     is_passed = serializers.SerializerMethodField()
     questions_count = serializers.SerializerMethodField()
+    is_completed = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
-        fields = ["id", "title", "description", "questions_count", "is_passed"]
+        fields = ["id", "title", "description", "questions_count", "is_passed",'is_completed']
 
     def get_is_passed(self, obj):
         user = self.context.get("request").user
@@ -203,6 +204,9 @@ class QuizPlayerSerializer(serializers.ModelSerializer):
 
     def get_questions_count(self, obj):
         return obj.questions.count()
+    def get_is_completed(self, obj):
+        user = self.context.get("request").user
+        return QuizAttempt.objects.filter(user=user, quiz=obj).exists()
 
 
 class SectionPlayerSerializer(serializers.ModelSerializer):

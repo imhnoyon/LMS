@@ -27,6 +27,7 @@ urlpatterns = [
     path('courses/<int:pk>/sections/<int:section_id>/', views.SectionView.as_view()),
     
     path('sections/lectures/<int:section_id>/', views.LectureView.as_view()),
+    path('sections/lectures/<int:section_id>/<int:lecture_id>/', views.LectureView.as_view()),
   
     # Quiz
     path('sections/quizzes/<int:section_id>/', views.QuizView.as_view()),
