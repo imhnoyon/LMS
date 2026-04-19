@@ -855,7 +855,7 @@ class CommentLectureAPIView(APIView):
             parent__isnull=True   # only top-level comments
         ).select_related('user').prefetch_related('replies').order_by('-created_at')
 
-        serializer = CommentLectureSerializer(comments, many=True)
+        serializer = CommentLectureSerializer(comments, many=True, context={"request": request})
 
         return APIResponse.success(
             data={"comments": serializer.data},
@@ -880,7 +880,7 @@ class CommentLectureAPIView(APIView):
             parent_id=parent_id if parent_id else None
         )
 
-        serializer = CommentLectureSerializer(comment)
+        serializer = CommentLectureSerializer(comment, context={"request": request})
 
         return APIResponse.success(
             data=serializer.data,

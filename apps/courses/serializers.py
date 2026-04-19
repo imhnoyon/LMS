@@ -386,10 +386,11 @@ class courseInformationserializer(serializers.ModelSerializer):
 class CommentLectureSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.full_name", read_only=True)
     replies = serializers.SerializerMethodField()
+    image = serializers.ImageField(source='user.avatar', read_only=True)
 
     class Meta:
         model = Comment
-        fields = ['id', 'lecture', 'user_name', 'text', 'parent', 'replies', 'created_at']
+        fields = ['id', 'lecture', 'user_name', 'text', 'parent', 'replies','image', 'created_at']
 
     def get_replies(self, obj):
-        return CommentLectureSerializer(obj.replies.all(), many=True).data
+        return CommentLectureSerializer(obj.replies.all(), many=True, context=self.context).data
