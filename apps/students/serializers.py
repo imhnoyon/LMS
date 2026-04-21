@@ -1,3 +1,5 @@
+import json
+
 from rest_framework import serializers
 from apps.users.models import User
 from apps.enrollments.models import Enrollment, Certificate
@@ -52,7 +54,7 @@ class UserBasicSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'email']
 
 class StudentProfileSerializer(serializers.ModelSerializer):
-    user = UserBasicSerializer()
+    user = UserBasicSerializer(required=False)
 
     class Meta:
         model = Student
@@ -60,17 +62,35 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'age', 'created_at']
 
     def to_internal_value(self, data):
+        data = data.copy()
 
-        if "user.name" in data:
-            user_data = data.get("user", {})
-            if isinstance(user_data, str): user_data = {} 
-            user_data["name"] = data.pop("user.name")
-            data["user"] = user_data
-            
-        if "user.phone" in data:
-            user_data = data.get("user", {})
-            if isinstance(user_data, str): user_data = {} 
-            user_data["phone"] = data.pop("user.phone")
+        user_data = {}
+        raw_user = data.get("user")
+        if isinstance(raw_user, dict):
+            user_data.update(raw_user)
+        elif isinstance(raw_user, str):
+            try:
+                parsed_user = json.loads(raw_user)
+                if isinstance(parsed_user, dict):
+                    user_data.update(parsed_user)
+            except (TypeError, ValueError):
+                pass
+
+        # Support dotted, bracket, and flat payload styles.
+        field_mappings = (
+            ("user.name", "name"),
+            ("user.phone", "phone"),
+            ("user[name]", "name"),
+            ("user[phone]", "phone"),
+            ("name", "name"),
+            ("phone", "phone"),
+        )
+        for incoming_key, user_key in field_mappings:
+            if incoming_key in data:
+                user_data[user_key] = data.get(incoming_key)
+                data.pop(incoming_key)
+
+        if user_data:
             data["user"] = user_data
             
         return super().to_internal_value(data)
@@ -78,6 +98,33 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', None)
+
+        if user_data is None:
+            user_data = {}
+
+        initial_data = self.initial_data or {}
+        fallback_phone = None
+
+        if isinstance(initial_data, dict):
+            fallback_phone = (
+                initial_data.get("user.phone")
+                or initial_data.get("user[phone]")
+                or initial_data.get("phone")
+            )
+
+            raw_user = initial_data.get("user")
+            if not fallback_phone and isinstance(raw_user, dict):
+                fallback_phone = raw_user.get("phone")
+            elif not fallback_phone and isinstance(raw_user, str):
+                try:
+                    parsed_user = json.loads(raw_user)
+                    if isinstance(parsed_user, dict):
+                        fallback_phone = parsed_user.get("phone")
+                except (TypeError, ValueError):
+                    pass
+
+        if fallback_phone is not None and "phone" not in user_data:
+            user_data["phone"] = fallback_phone
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

@@ -389,6 +389,46 @@ class QuizView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+        
+        
+    def patch(self, request, section_id, quiz_id):
+        quiz = get_object_or_404(Quiz, pk=quiz_id, section_id=section_id)
+        if not get_course_with_permission(quiz.section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
+
+        serializer = QuizSerializer(quiz, data=request.data, partial=True)
+        if serializer.is_valid():
+            quiz = serializer.save()
+
+            if 'questions' in request.data:
+                quiz.questions.all().delete()  # Clear existing questions
+                question_order = 1
+                for q_data in request.data['questions']:
+                    options = q_data.pop('options', [])
+                    question = Question.objects.create(
+                        quiz=quiz,
+                        order=question_order,
+                        **q_data
+                    )
+                    question_order += 1
+                    option_order = 1
+                    for opt in options:
+                        QuestionOption.objects.create(
+                            question=question,
+                            order=option_order,
+                            **opt
+                        )
+                        option_order += 1
+
+            return APIResponse.success(
+                data=QuizSerializer(quiz).data,
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.error(
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 # ── Step 4: Publish 
 class PublishCourseView(APIView):

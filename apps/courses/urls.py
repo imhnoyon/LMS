@@ -31,6 +31,7 @@ urlpatterns = [
   
     # Quiz
     path('sections/quizzes/<int:section_id>/', views.QuizView.as_view()),
+    path('sections/quizzes/<int:section_id>/<int:quiz_id>/', views.QuizView.as_view()),
     # Publish
     path('courses/publish/<int:pk>/', views.PublishCourseView.as_view()),
     

@@ -272,3 +272,13 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 # Commission rates (multipliers)
 from decimal import Decimal
 PLATFORM_FEE_RATE = Decimal("0.10")
+
+
+
+
+
+# Max request size (total request body)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5368709120 # 50 MB
+
+# Max single file size
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5368709120  # 50 MB
