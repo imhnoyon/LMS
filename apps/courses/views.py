@@ -213,7 +213,7 @@ class CourseAdvanceInfoManageView(APIView):
         )
 
 
-# ── Step 2: Advance Info 
+# Step 2: Advance Info 
 class CourseAdvanceView(APIView):
     permission_classes = [IsInstructorOrOrganization, IsAuthenticated]
     
