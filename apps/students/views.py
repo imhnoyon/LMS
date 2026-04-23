@@ -631,7 +631,13 @@ class DeleteAccountAPIView(APIView):
                 message="Password is incorrect.",
                 status_code=400
             )
-        user.delete()
+            
+        from django.utils import timezone
+
+        user.is_active = False
+        user.save()
+        
+        # user.delete()
         return APIResponse.success(
             message="Account deleted successfully.",
             status_code=200
