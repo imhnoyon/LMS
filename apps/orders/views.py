@@ -12,7 +12,6 @@ from utils.permissions import IsStudent
 
 
 class AddToCartView(APIView):
-    # permission_classes = [IsAuthenticated, IsStudent]
     @transaction.atomic
     def post(self, request):
         serializer = AddToCartSerializer(data=request.data)

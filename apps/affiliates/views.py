@@ -16,6 +16,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import AffiliateReferralClick
 from django.db.models import Sum
+from django.db.models.functions import TruncMonth
 from apps.payments.models import Withdrawal
 
 
@@ -376,7 +377,214 @@ class AffiliateDashboardView(APIView):
             },
             status_code=200
         )
+        
+        
+class AffiliateMainDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        if request.user.role != "affiliate":
+            return APIResponse.error(
+                message="Only affiliate users can access this dashboard.",
+                status_code=403
+            )
+
+        affiliate = get_object_or_404(Affiliate, user=request.user)
+
+        #  Trend Calculation (This Month vs Last Month)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        now = timezone.now()
+        this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month_end = this_month_start - timedelta(seconds=1)
+        last_month_start = (this_month_start - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        def shift_month(month_start_date, months_delta):
+            month_index = (month_start_date.year * 12 + month_start_date.month - 1) + months_delta
+            new_year = month_index // 12
+            new_month = (month_index % 12) + 1
+            return month_start_date.replace(year=new_year, month=new_month, day=1)
+
+        # Helper function for trends
+        def get_trend(current, last):
+            if last == 0:
+                return "+100%" if current > 0 else "0%"
+            diff = ((current - last) / last) * 100
+            return f"+{round(diff, 1)}%" if diff > 0 else f"{round(diff, 1)}%"
+
+        # Clicks trends
+        clicks_now = AffiliateReferralClick.objects.filter(affiliate=affiliate, clicked_at__gte=this_month_start).count()
+        clicks_past = AffiliateReferralClick.objects.filter(affiliate=affiliate, clicked_at__range=(last_month_start, last_month_end)).count()
+        
+        referral_codes = AffiliateCourseLink.objects.filter(affiliate=affiliate).values_list('code', flat=True)
+
+        total_sales_items = OrderItem.objects.filter(
+            order__affiliate_commissions__affiliate=affiliate,
+            course=models.F('order__affiliate_commissions__product'),
+            order=models.F('order__affiliate_commissions__order')
+        ).distinct()
+        
+        total_sales_amount = total_sales_items.aggregate(models.Sum('paid_price'))['paid_price__sum'] or Decimal("0.00")
+
+        # Sales trends based on items
+        sales_now_amount = total_sales_items.filter(
+            created_at__gte=this_month_start
+        ).aggregate(models.Sum('paid_price'))['paid_price__sum'] or Decimal("0.00")
+        
+        sales_past_amount = total_sales_items.filter(
+            created_at__range=(last_month_start, last_month_end)
+        ).aggregate(models.Sum('paid_price'))['paid_price__sum'] or Decimal("0.00")
+        
+        # Earned trends (from commission records)
+        earned_now = AffiliateCommission.objects.filter(
+            affiliate=affiliate, status__in=["approved", "paid"],
+            created_at__gte=this_month_start
+        ).aggregate(Sum('commission_rate'))['commission_rate__sum'] or Decimal("0.00")
+        
+        earned_past = AffiliateCommission.objects.filter(
+            affiliate=affiliate, status__in=["approved", "paid"],
+            created_at__range=(last_month_start, last_month_end)
+        ).aggregate(Sum('commission_rate'))['commission_rate__sum'] or Decimal("0.00")
+
+        # Pending trends
+        pending_now = Withdrawal.objects.filter(user=request.user, status="pending", requested_at__gte=this_month_start).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        pending_past = Withdrawal.objects.filter(user=request.user, status="pending", requested_at__range=(last_month_start, last_month_end)).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+
+        # Stats
+        # Calculate totals directly from referral click logs for maximum accuracy
+        total_clicks = AffiliateReferralClick.objects.filter(affiliate=affiliate).count()
+        current_month_clicks = clicks_now
+        last_month_clicks = clicks_past
+        total_unique_clicks = AffiliateReferralClick.objects.filter(affiliate=affiliate).values('session_key').distinct().count()
+        
+        if total_unique_clicks == 0 and total_clicks > 0:
+            total_unique_clicks = AffiliateReferralClick.objects.filter(affiliate=affiliate).values('ip_address').distinct().count()
+        
+        # Total earned amount
+        total_earned = affiliate.total_earned
+        # Pending commissions (Requested but not yet approved/paid)
+        pending_commissions = Withdrawal.objects.filter(
+            user=request.user,
+            status="pending"
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        
+
+        # Wallet details
+        total_payable = affiliate.total_payable
+        total_paid = affiliate.total_paid
+        
+        # Progress percentage (Paid vs Earned)
+        payout_progress = 0
+        if total_earned > 0:
+            payout_progress = (total_paid / total_earned) * 100
+
+        def get_payout_progress_as_of(cutoff_date):
+            earned_total = AffiliateCommission.objects.filter(
+                affiliate=affiliate,
+                status__in=["approved", "paid"],
+                created_at__lte=cutoff_date,
+            ).aggregate(total=Sum("commission_rate"))["total"] or Decimal("0.00")
+
+            paid_total = Withdrawal.objects.filter(
+                user=request.user,
+                status__in=["approved", "paid"],
+                requested_at__lte=cutoff_date,
+            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+            if earned_total <= 0:
+                return Decimal("0.00")
+            return (paid_total / earned_total) * 100
+
+        last_month_payout_progress = get_payout_progress_as_of(last_month_end)
+        current_month_payout_progress = round(payout_progress, 1)
+        payout_remaining = round(max(Decimal("0.00"), Decimal("100.00") - Decimal(str(current_month_payout_progress))), 1)
+
+        one_year_start = shift_month(this_month_start, -11)
+        earned_monthly_query = AffiliateCommission.objects.filter(
+            affiliate=affiliate,
+            status__in=["approved", "paid"],
+            created_at__gte=one_year_start,
+            created_at__lte=now,
+        ).annotate(
+            month=TruncMonth('created_at')
+        ).values('month').annotate(
+            total=Sum('commission_rate')
+        ).order_by('month')
+
+        earned_monthly_map = {
+            row['month'].strftime("%Y-%m"): (row['total'] or Decimal("0.00"))
+            for row in earned_monthly_query
+        }
+
+        earned_graph_data = []
+        for month_offset in range(12):
+            month_start = shift_month(one_year_start, month_offset)
+            month_key = month_start.strftime("%Y-%m")
+            earned_graph_data.append({
+                "month": month_start.strftime("%b %Y"),
+                "total_earned": earned_monthly_map.get(month_key, Decimal("0.00"))
+            })
+
+        stats = {
+            "total_clicks": total_clicks,
+            "total_unique_clicks": total_unique_clicks,
+            "total_sales": total_sales_amount,
+            "total_earned": total_earned,
+            "pending_Withdraw": pending_commissions,
+            "wallet": {
+                "total_earned": total_earned,
+                "total_payable": total_payable,
+                "total_paid": total_paid,
+                "payout_progress": round(payout_progress, 1)
+            },
+            # Real trends from dataset
+            "trends": {
+                "clicks": get_trend(clicks_now, clicks_past),
+                "sales": get_trend(sales_now_amount, sales_past_amount),
+                "earned": get_trend(earned_now, earned_past),
+                "pending": get_trend(pending_now, pending_past)
+            },
+            "click_sections": {
+                "current_month_clicks": current_month_clicks,
+                "last_month_clicks": last_month_clicks,
+                "total_clicks": total_clicks
+            },
+            "clicks_pie_chart": {
+                "labels": ["Current Month", "Last Month", "Total Clicks"],
+                "values": [current_month_clicks, last_month_clicks, total_clicks]
+            },
+            "payout_progress_chart": {
+                "type": "doughnut",
+                "labels": ["Completed", "Remaining"],
+                "values": [current_month_payout_progress, payout_remaining],
+                "current_month": current_month_payout_progress,
+                "last_month": round(last_month_payout_progress, 1),
+                "overall": round(payout_progress, 1)
+            },
+            "payout_progress_monthly": {
+                "type": "bar",
+                "labels": ["Last Month", "Current Month"],
+                "values": [round(last_month_payout_progress, 1), current_month_payout_progress],
+                "current_month": current_month_payout_progress,
+                "last_month": round(last_month_payout_progress, 1),
+                "overall": round(payout_progress, 1)
+            },
+            "yearly_earned_graph": {
+                "type": "line",
+                "period": "last_12_months",
+                "data": earned_graph_data
+            }
+        }
+
+        return APIResponse.success(
+            message="Affiliate dashboard data retrieved successfully.",
+            data={
+                "stats": stats
+            },
+            status_code=200
+        )
 # Affiliate Wallet View for affiliate users
 class AffiliateWalletView(APIView):
     permission_classes = [IsAuthenticated]
