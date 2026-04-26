@@ -870,8 +870,10 @@ class AffiliateCreateStripeConnectAccountView(APIView):
             else:
                 account = stripe.Account.retrieve(affiliate.stripe_account_id)
 
-            return_url = request.build_absolute_uri(reverse("stripe-return-page"))
-            refresh_url = request.build_absolute_uri(reverse("stripe-cancel"))
+            # return_url = request.build_absolute_uri(reverse("stripe-return-page"))
+            # refresh_url = request.build_absolute_uri(reverse("stripe-cancel"))
+            return_url = f"{settings.FONTEND_ULR}/en/affiliate/withdrawal"
+            refresh_url = "http://localhost:8000/api/stripe/cancel"
 
             account_link = stripe.AccountLink.create(
                 account=account.id,

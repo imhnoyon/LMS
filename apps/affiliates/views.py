@@ -4,6 +4,7 @@ from rest_framework.views import APIView, settings
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.db.models import Q
 from apps.courses.models import Course
+from apps.instructors.serializers import WithdrawalRequestSerializer
 from apps.orders.models import Order, OrderItem
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Affiliate, AffiliateCourseLink, AffiliateCommission
@@ -666,3 +667,27 @@ class AffiliateDetailsView(APIView):
             data=serializer.data,
             status_code=200
         )
+        
+        
+        
+        
+class AffiliateWithdrawlistview(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        from apps.payments.models import Withdrawal
+
+        withdrawals = Withdrawal.objects.filter(
+            user=request.user
+        ).order_by("-requested_at")
+
+        paginator = self.pagination_class()
+        paginated_queryset = paginator.paginate_queryset(withdrawals, request)
+
+        serializer = WithdrawalRequestSerializer(paginated_queryset, many=True)
+
+        return paginator.get_paginated_response({
+            "message": "Affiliate withdrawal history retrieved successfully.",
+            "data": serializer.data
+        })

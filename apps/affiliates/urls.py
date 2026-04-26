@@ -12,6 +12,7 @@ urlpatterns = [
     path("track-referral-click/", TrackReferralClickView.as_view(), name="track-referral-click"),
     path("affiliate/dashboard/", AffiliateDashboardView.as_view(), name="affiliate-dashboard"),
     path("affiliate/wallet/", AffiliateWalletView.as_view(), name="affiliate-wallet"),
+    path("affiliate/withdrawal-requests-list/", AffiliateWithdrawlistview.as_view(), name="affiliate-withdrawal-requests"),
     
     # Affiliate Profile
     path("affiliate/profile/", AffiliateProfileView.as_view(), name="affiliate-profile"),
