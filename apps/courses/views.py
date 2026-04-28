@@ -1,7 +1,8 @@
-from rest_framework.views import APIView
+from rest_framework.views import APIView, Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from django.db.models import Q
+from django.db.models import Q, Avg, Count, Sum
+from django.db.models.functions import TruncDate
 from utils.helper_functions import parse_duration_to_days
 from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization, IsStudent
 from .models import *
@@ -11,6 +12,9 @@ from utils.paginations import CustomPagination
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import json
+from datetime import date, timedelta
+from apps.enrollments.models import Enrollment
+from apps.payments.models import Commission
 from apps.organizations.models import Membership
 
 # Helper function to check course ownership or organization access
@@ -491,10 +495,8 @@ class CourseListByInstructorView(APIView):
         search = request.query_params.get('search')
         category = request.query_params.get('category')
         status_param = request.query_params.get('status')
-
-        courses = Course.objects.filter(instructor=request.user).order_by('-id')
-        
-
+        courses = Course.objects.filter(instructor=request.user, status="accepted").order_by("-id")
+    
         if search:
             courses = courses.filter(
                 Q(title__icontains=search) |
@@ -503,7 +505,6 @@ class CourseListByInstructorView(APIView):
                 Q(language__icontains=search) |
                 Q(level__icontains=search)
             )
-
         if category:
             courses = courses.filter(category__name__iexact=category)
         if status_param:
@@ -947,3 +948,181 @@ class MarkLiveClassPresentAPIView(APIView):
                 "is_present": obj.is_present
             }
         )
+        
+        
+        
+class MyCourseDetailsAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def get(self, request, pk):
+        course = get_object_or_404(
+            Course.objects.select_related("instructor", "category", "advance_info"),
+            pk=pk,
+            instructor=request.user   
+        )
+
+        serializer = CourseDetailspageSerializer(
+            course,
+            context={"request": request}
+        )
+
+        total_lectures = Lecture.objects.filter(section__course=course).count()
+        total_comments = Comment.objects.filter(course=course).count()
+        total_students = Enrollment.objects.filter(course=course).values("user").distinct().count()
+        total_attachments = Lecture.objects.filter(
+            section__course=course,
+        ).exclude(
+            LectureAttachment__isnull=True
+        ).exclude(
+            LectureAttachment=""
+        ).count()
+
+        total_reviews = course.reviews.count()
+        overall_rating = course.reviews.aggregate(avg=Avg("rating"))["avg"] or 0
+
+        rating_breakdown = []
+        for stars in [5, 4, 3, 2, 1]:
+            count = course.reviews.filter(rating=stars).count()
+            percentage = round((count / total_reviews) * 100, 2) if total_reviews else 0
+            rating_breakdown.append({
+                "stars": stars,
+                "count": count,
+                "percentage": percentage,
+            })
+
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        current_day_count = today.day
+
+        revenue_rows = Commission.objects.filter(
+            user=request.user,
+            course=course,
+            created_at__date__gte=month_start,
+            created_at__date__lte=today,
+        ).annotate(
+            day=TruncDate("created_at")
+        ).values("day").annotate(
+            total=Sum("commission_amount")
+        ).order_by("day")
+
+        revenue_map = {
+            row["day"].day: row["total"] or 0
+            for row in revenue_rows
+        }
+
+        revenue_chart = []
+        for day_num in range(1, current_day_count + 1):
+            current_date = date(today.year, today.month, day_num)
+            revenue_chart.append({
+                "label": current_date.strftime("%b %d"),
+                "amount": revenue_map.get(day_num, 0),
+            })
+
+        start_of_week = today - timedelta(days=today.weekday())
+        week_days = [start_of_week + timedelta(days=i) for i in range(7)]
+
+        enrollment_rows = Enrollment.objects.filter(
+            course=course,
+            enrolled_at__date__gte=start_of_week,
+            enrolled_at__date__lte=today,
+        ).annotate(
+            day=TruncDate("enrolled_at")
+        ).values("day").annotate(
+            total=Count("id")
+        )
+
+        completion_rows = Enrollment.objects.filter(
+            course=course,
+            is_completed=True,
+            enrolled_at__date__gte=start_of_week,
+            enrolled_at__date__lte=today,
+        ).annotate(
+            day=TruncDate("enrolled_at")
+        ).values("day").annotate(
+            total=Count("id")
+        )
+
+        enrollment_map = {row["day"]: row["total"] for row in enrollment_rows}
+        completion_map = {row["day"]: row["total"] for row in completion_rows}
+
+        course_overview_chart = [
+            {
+                "label": day.strftime("%a"),
+                "enrollments": enrollment_map.get(day, 0),
+                "completions": completion_map.get(day, 0),
+            }
+            for day in week_days
+        ]
+
+        advance_info = getattr(course, "advance_info", None)
+        thumbnail_url = None
+        if advance_info and getattr(advance_info, "thumbnail", None):
+            thumbnail_url = request.build_absolute_uri(advance_info.thumbnail.url)
+
+        response_data = dict(serializer.data)
+        response_data["dashboard"] = {
+            "hero": {
+                "thumbnail": thumbnail_url,
+                "published_at": course.created_at.strftime("%b %d, %Y") if course.created_at else None,
+                "last_updated_at": course.updated_at.strftime("%b %d, %Y") if course.updated_at else None,
+                "created_by": getattr(course.instructor, "name", None),
+                "title": course.title,
+                "subtitle": course.subtitle,
+                "course_price": course.price,
+                "total_revenue": course.commissions.aggregate(total=Sum("commission_amount"))["total"] or 0,
+                "overall_rating": round(float(overall_rating), 1) if overall_rating else 0,
+                "reviews_count": total_reviews,
+            },
+            "cards": [
+                {"label": "Lectures", "value": total_lectures, "sub_label": "Total Lectures"},
+                {"label": "Total Comments", "value": total_comments, "sub_label": "Course Comments"},
+                {"label": "Students Enrolled", "value": total_students, "sub_label": "Unique Students"},
+                {"label": "Attach File", "value": total_attachments, "sub_label": "Lecture Attachments"},
+                {"label": "Language", "value": course.get_language_display() if hasattr(course, "get_language_display") else course.language, "sub_label": "Course Language"},
+            ],
+            "rating_chart": {
+                "overall_rating": round(float(overall_rating), 1) if overall_rating else 0,
+                "reviews_count": total_reviews,
+                "trend": {
+                    "labels": [item["label"] for item in revenue_chart],
+                    "values": [float(item["amount"]) for item in revenue_chart],
+                },
+                "breakdown": rating_breakdown,
+            },
+            "revenue_chart": {
+                "labels": [item["label"] for item in revenue_chart],
+                "values": [float(item["amount"]) for item in revenue_chart],
+            },
+            "course_overview_chart": {
+                "labels": [item["label"] for item in course_overview_chart],
+                "enrollments": [item["enrollments"] for item in course_overview_chart],
+                "completions": [item["completions"] for item in course_overview_chart],
+            },
+        }
+
+        return APIResponse.success(
+            message="Your course details retrieved successfully.",
+            data=response_data,
+            status_code=200
+        )
+        
+        
+class CourseOverviewAPIView(APIView):
+    permission_classes = [IsAuthenticated]  
+
+    def get(self, request, course_id):
+        course = get_object_or_404(
+            Course.objects.select_related("category", "advance_info"),
+            id=course_id
+        )
+
+        serializer = courseOverviewSerializer(
+            course,
+            context={"request": request}
+        )
+
+        return Response({
+            "success": True,
+            "message": "Course overview retrieved successfully.",
+            "data": serializer.data
+        }, status=200)

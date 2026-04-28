@@ -17,12 +17,10 @@ urlpatterns = [
     path("withdraw/approve/<str:withdraw_id>/", ApproveWithdrawView.as_view()),
     path("instructor/withdraw/cancel/<str:withdraw_id>/",InstructorCancelWithdrawView.as_view(),name="instructor-withdraw-cancel",),
     
-    
     # Affiliate withdrawals
     path("affiliate/stripe/connect/", AffiliateCreateStripeConnectAccountView.as_view()),
     path("affiliate/stripe/dashboard-link/", AffiliateStripeDashboardLoginLinkView.as_view()),
     path("affiliate/withdraw/request/", AffiliateWithdrawRequestView.as_view()),
-    
     
     # Organization Withdrawals
     path("organization/stripe/connect/", OrganizationCreateStripeConnectAccountView.as_view()),

@@ -394,3 +394,28 @@ class CommentLectureSerializer(serializers.ModelSerializer):
 
     def get_replies(self, obj):
         return CommentLectureSerializer(obj.replies.all(), many=True, context=self.context).data
+    
+    
+    
+    
+class CourseDetailspageSerializer(serializers.ModelSerializer):
+    instructor = InstructorDetailSerializer(read_only=True)
+    category = CategorySerializer(read_only=True)
+    
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price', 'discount_price','rating', 'coupon_code', 'expiry_type', 'status', 'created_at','instructor']
+        
+        
+        
+        
+class courseOverviewSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    thumbnail = serializers.ImageField(source='advance_info.thumbnail', read_only=True)
+    description = serializers.CharField(source='advance_info.description', read_only=True)
+    thumbnail_video = serializers.FileField(source='advance_info.trailer_video', read_only=True)
+    
+    
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'description', 'thumbnail', 'thumbnail_video', 'category_name', 'language', 'level', 'price', 'discount_price',]

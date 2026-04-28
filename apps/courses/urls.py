@@ -34,6 +34,7 @@ urlpatterns = [
     path('sections/quizzes/<int:section_id>/<int:quiz_id>/', views.QuizView.as_view()),
     # Publish
     path('courses/publish/<int:pk>/', views.PublishCourseView.as_view()),
+    path("courses/<int:course_id>/overview/", views.CourseOverviewAPIView.as_view()),
     
     # Live Classes
     path('live-classes/stats/', views.InstructorLiveClassStatsView.as_view(), name='live-class-stats'),
@@ -48,5 +49,8 @@ urlpatterns = [
     path('course/info/', views.CourseInformationAPIView.as_view(), name='course-information'),
     path('lectures/comments/', views.CommentLectureAPIView.as_view(), name='course-comments'),
     path('lectures/comments/<int:lecture_id>/', views.CommentLectureAPIView.as_view(), name='course-comments'),
+    
+    #course details page for instructor
+    path("my-courses/<int:pk>/", views.MyCourseDetailsAPIView.as_view()),
 
 ]
