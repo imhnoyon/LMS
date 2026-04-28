@@ -20,4 +20,8 @@ urlpatterns = [
     
     #live classes upload
     path("live-session/upload/<int:course_id>/", InstructorLiveSessionUploadView.as_view(), name="live-session-upload"),
+    
+    # signature upload
+    path("upload-signature/", SignatureUploadAPIView.as_view(), name="upload-signature"),
+    path("get-signature/", MyInstructorSignatureAPIView.as_view(), name="get-signature"),
 ]

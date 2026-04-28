@@ -1,5 +1,6 @@
+import base64
 import calendar
-from rest_framework.views import APIView
+from rest_framework.views import APIView, Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -131,7 +132,7 @@ class CourseListView(APIView):
     def get(self, request):
         search = request.query_params.get("search")
         category = request.query_params.get("category")
-        status_param = request.query_params.get("status")
+        status = request.query_params.get("status")
         language = request.query_params.get("language")
         level = request.query_params.get("level")
 
@@ -147,8 +148,8 @@ class CourseListView(APIView):
         if category:
             courses = courses.filter(category_id=category)
 
-        if status_param:
-            courses = courses.filter(status__iexact=status_param)
+        if status:
+            courses = courses.filter(status__iexact=status)
 
         if language:
             courses = courses.filter(language__iexact=language)
@@ -535,3 +536,100 @@ class InstructorLiveSessionUploadView(APIView):
             data=serializer.data,
             status_code=201
         )
+        
+        
+
+from django.core.files.base import ContentFile
+import uuid     
+class SignatureUploadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data.get("signature")
+
+        if not data:
+            return Response({"error": "No signature provided"}, status=400)
+
+        signature_file = None
+
+        # Handle both base64 string and file upload
+        if isinstance(data, str):
+            # base64 encoded string
+            try:
+                format, imgstr = data.split(";base64,")
+                ext = format.split("/")[-1]
+                file_name = f"{uuid.uuid4()}.{ext}"
+                signature_file = ContentFile(
+                    base64.b64decode(imgstr),
+                    name=file_name
+                )
+            except (ValueError, IndexError):
+                return Response({"error": "Invalid base64 format"}, status=400)
+        else:
+            # Direct file upload (InMemoryUploadedFile or similar)
+            signature_file = data
+
+        if not signature_file:
+            return APIResponse.error({"error": "Failed to process signature"}, status_code=400)
+
+        obj, created = Instructor.objects.update_or_create(
+            user=request.user,
+            defaults={'signature': signature_file}
+        )
+
+        return APIResponse.success({
+            "message": "Signature saved successfully" if created else "Signature updated successfully",
+            "id": obj.id
+        })
+        
+    def patch(self, request):
+        data = request.data.get("signature")
+
+        if not data:
+            return Response({"error": "No signature provided"}, status=400)
+
+        signature_file = None
+
+        # Handle both base64 string and file upload
+        if isinstance(data, str):
+            # base64 encoded string
+            try:
+                format, imgstr = data.split(";base64,")
+                ext = format.split("/")[-1]
+                file_name = f"{uuid.uuid4()}.{ext}"
+                signature_file = ContentFile(
+                    base64.b64decode(imgstr),
+                    name=file_name
+                )
+            except (ValueError, IndexError):
+                return Response({"error": "Invalid base64 format"}, status=400)
+        else:
+            # Direct file upload (InMemoryUploadedFile or similar)
+            signature_file = data
+
+        if not signature_file:
+            return APIResponse.error({"error": "Failed to process signature"}, status_code=400)
+
+        obj, created = Instructor.objects.update_or_create(
+            user=request.user,
+            defaults={'signature': signature_file}
+        )
+
+        return APIResponse.success({
+            "message": "Signature saved successfully" if created else "Signature updated successfully",
+            "id": obj.id
+        })
+        
+        
+class MyInstructorSignatureAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instructor = Instructor.objects.select_related('user').get(user=request.user)
+        serializer = InstructorSignatureSerializer(instructor, context={"request": request})
+
+        return Response({
+            "success": True,
+            "message": "Instructor signature retrieved successfully.",
+            "data": serializer.data
+        }, status=200)

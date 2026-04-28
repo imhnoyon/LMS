@@ -38,6 +38,7 @@ class Instructor(models.Model):
     total_withdrawals = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
     is_approved = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
+    signature = models.ImageField(upload_to="signatures/", blank=True, null=True)
     is_organization_instructor = models.BooleanField(default=False)
     stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_onboarding_completed = models.BooleanField(default=False)

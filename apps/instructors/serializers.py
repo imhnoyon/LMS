@@ -199,3 +199,22 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Withdrawal
         fields = ['id','withdraw_id', 'user_name', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at']
+        
+        
+        
+        
+class InstructorSignatureSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="user.name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    signature = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Instructor
+        fields = ['id','name', 'email','signature',]
+        read_only_fields = ['id']
+    
+    def get_signature(self, obj):
+        if obj.signature:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.signature.url) if request else obj.signature.url
+        return None
