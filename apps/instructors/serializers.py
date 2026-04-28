@@ -2,6 +2,7 @@ from rest_framework import serializers
 from apps.instructors.models import Instructor
 from apps.organizations.models import Invitation, Membership
 from apps.payments.models import Withdrawal
+from apps.enrollments.models import Certificate
 from apps.students.models import Student
 from apps.users.models import User
 
@@ -217,4 +218,23 @@ class InstructorSignatureSerializer(serializers.ModelSerializer):
         if obj.signature:
             request = self.context.get('request')
             return request.build_absolute_uri(obj.signature.url) if request else obj.signature.url
+        return None
+
+
+class InstructorCertificateSerializer(serializers.ModelSerializer):
+    certificated_id = serializers.SerializerMethodField()
+    
+    
+    class Meta:
+        model = Course
+        fields = ["id",'certificated_id', "title", "subtitle", "category", "topic", "language", "status", "created_at"]
+        
+        
+        
+    def get_certificated_id(self, obj):
+        enrollment = obj.enrollments.filter(is_completed=True).first()
+        
+        if enrollment and enrollment.certificate:
+            return enrollment.certificate.certificate_id
+        
         return None

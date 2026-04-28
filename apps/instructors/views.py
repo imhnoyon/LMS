@@ -633,3 +633,28 @@ class MyInstructorSignatureAPIView(APIView):
             "message": "Instructor signature retrieved successfully.",
             "data": serializer.data
         }, status=200)
+
+
+class InstructorCertificateListView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        accepted_courses = Course.objects.filter(
+            instructor=request.user,
+            status="accepted"
+        ).order_by("-id")
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(accepted_courses, request)
+
+        serializer = InstructorCertificateSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            data=serializer.data,
+            message="Instructor accepted courses retrieved successfully."
+        )
