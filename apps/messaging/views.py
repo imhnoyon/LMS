@@ -42,7 +42,7 @@ class MessageListCreateAPIView(APIView):
 		conv = get_object_or_404(Conversation, id=conversation_id)
 		if not conv.participants.filter(id=request.user.id).exists():
 			return Response({"success": False, "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
-		msgs = conv.messages.order_by("-created_at")
+		msgs = conv.messages.order_by("created_at")
 		serializer = MessageSerializer(msgs, many=True)
 		return APIResponse.success("Messages retrieved successfully", serializer.data)
 

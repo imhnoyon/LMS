@@ -342,73 +342,72 @@ class BlockUserView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        if  user.is_active:
+        # 🔁 Toggle logic
+        if user.is_active:
+            # 🔴 Block user
             user.is_active = False
             user.is_verified = False
-            user.save(update_fields=["is_active", "is_verified"])
-
-            return APIResponse.success(
-                message="User blocked successfully.",
-                data={
-                    "user_id": str(user.id),
-                    "is_active": user.is_active,
-                    "is_verified": user.is_verified,
-                    "status": "blocked"
-                },
-                status_code=status.HTTP_200_OK
-            )
-
-        return APIResponse.success(
-            message="User is already blocked.",
-            data={
-                "user_id": str(user.id),
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "status": "already blocked"
-            },
-            status_code=status.HTTP_200_OK
-        )
-        
-        
-        
-class UnblockUserView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
-
-    def patch(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
-
-        if request.user == user:
-            return APIResponse.error(
-                message="You cannot unblock yourself.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not user.is_active:
+            status_text = "blocked"
+            message = "User blocked successfully."
+        else:
+            # 🟢 Unblock user
             user.is_active = True
-            user.is_verified = True
-            user.save(update_fields=["is_active","is_verified"])
+            status_text = "unblocked"
+            message = "User unblocked successfully."
 
-            return APIResponse.success(
-                message="User unblocked successfully.",
-                data={
-                    "user_id": str(user.id),
-                    "is_active": user.is_active,
-                    "is_verified": user.is_verified,
-                    "status": "unblocked"
-                },
-                status_code=status.HTTP_200_OK
-            )
+        user.save(update_fields=["is_active", "is_verified"])
 
         return APIResponse.success(
-            message="User is already active.",
+            message=message,
             data={
                 "user_id": str(user.id),
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
-                "status": "already active"
+                "status": status_text
             },
             status_code=status.HTTP_200_OK
         )
+        
+        
+        
+# class UnblockUserView(APIView):
+#     permission_classes = [IsAuthenticated, IsAdminUser]
+
+#     def patch(self, request, pk):
+#         user = get_object_or_404(User, pk=pk)
+
+#         if request.user == user:
+#             return APIResponse.error(
+#                 message="You cannot unblock yourself.",
+#                 status_code=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         if not user.is_active:
+#             user.is_active = True
+#             user.is_verified = True
+#             user.save(update_fields=["is_active","is_verified"])
+
+#             return APIResponse.success(
+#                 message="User unblocked successfully.",
+#                 data={
+#                     "user_id": str(user.id),
+#                     "is_active": user.is_active,
+#                     "is_verified": user.is_verified,
+#                     "status": "unblocked"
+#                 },
+#                 status_code=status.HTTP_200_OK
+#             )
+
+#         return APIResponse.success(
+#             message="User is already active.",
+#             data={
+#                 "user_id": str(user.id),
+#                 "is_active": user.is_active,
+#                 "is_verified": user.is_verified,
+#                 "status": "already active"
+#             },
+#             status_code=status.HTTP_200_OK
+#         )
         
         
         
