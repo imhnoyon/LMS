@@ -24,6 +24,7 @@ from django.db.models import Sum
 from apps.organizations.models import Membership
 import stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
+from apps.messaging.models import Conversation
 
 
 # Initialize Stripe with API key
@@ -192,6 +193,8 @@ class StripeWebhookView(APIView):
         self._mark_payment_success(payment, session, payment_method)
         self._mark_order_paid(payment.order)
         self._create_enrollments(payment)
+        # Create conversations between student and instructors of purchased courses
+        self._create_conversations(payment)
         self._create_invoice(payment)
         self._create_course_commissions(payment)
 
@@ -399,6 +402,39 @@ class StripeWebhookView(APIView):
             User.objects.filter(role="owner").update(
                 platform_revenue=F("platform_revenue") + total_platform_revenue
             )
+
+    def _create_conversations(self, payment):
+        """Ensure a Conversation exists between the purchasing user and each course instructor."""
+        try:
+            order_items = payment.order.items.select_related("course", "course__instructor").all()
+        except Exception:
+            return
+
+        student = payment.user
+
+        for item in order_items:
+            course = getattr(item, "course", None)
+            if not course:
+                continue
+
+            instructor = getattr(course, "instructor", None)
+            if not instructor:
+                continue
+
+            # don't create conversation with self
+            if instructor.id == student.id:
+                continue
+
+            # Only create conversation if an enrollment exists (safety check)
+            enrolled = Enrollment.objects.filter(user=student, course=course).exists()
+            if not enrolled:
+                continue
+
+            # Check for existing two-person conversation
+            conv = Conversation.objects.filter(participants=student).filter(participants=instructor).distinct().first()
+            if not conv:
+                conv = Conversation.objects.create()
+                conv.participants.add(student, instructor)
         
 
     def handle_payment_intent_succeeded(self, payment_intent):

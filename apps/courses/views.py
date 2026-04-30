@@ -103,6 +103,14 @@ class CourseCreateView(APIView):
             serializer.save()
             return APIResponse.success(data=serializer.data)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request, pk):
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        serializer = CourseBasicSerializer(course, context={"request": request})
+        return APIResponse.success(data=serializer.data)
 
 
 class CourseAdvanceInfoManageView(APIView):
@@ -193,7 +201,23 @@ class CourseAdvanceInfoManageView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+    
+    def get(self, request, pk):
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        advance_info = CourseAdvanceInfo.objects.filter(course=course).first()
 
+        if not advance_info:
+            return APIResponse.error(
+                message="Course advance info not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = CourseAdvanceInfoSerializer(advance_info, context={"request": request})
+        return APIResponse.success(data=serializer.data)
+    
     def delete(self, request, pk):
         course = get_course_with_permission(pk, request.user)
         if not course:
@@ -246,6 +270,16 @@ class SectionView(APIView):
             serializer.save(course=course)
             return APIResponse.success(data=serializer.data, status_code=status.HTTP_201_CREATED)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request, pk):
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        sections = Section.objects.filter(course=course).order_by("order")
+        serializer = SectionSerializer(sections, many=True, context={"request": request})
+        return APIResponse.success(data=serializer.data)
+    
 
     def patch(self, request, pk, section_id):
         course = get_course_with_permission(pk, request.user)

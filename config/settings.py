@@ -36,6 +36,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # --------------------------------------------------
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,6 +49,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
+    
+    
 
     # Local apps
     'apps.users',
@@ -286,3 +289,20 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5368709120  # 50 MB
 
 FONTEND_ULR = os.getenv("FONTEND_ULR", "http://localhost:3001")
 FONTEND_SUCCESSFUL_URL = os.getenv("FONTEND_SUCCESSFUL_URL", "http://localhost:3000")
+
+
+
+INSTALLED_APPS += ["channels"]
+ASGI_APPLICATION = "config.asgi.application"
+CHANNEL_LAYERS = {
+  "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+}
+
+
+# for production, you would switch to RedisChannelLayer and configure it with your Redis server details. Example:
+# CHANNEL_LAYERS = {
+#   "default": {
+#     "BACKEND": "channels_redis.core.RedisChannelLayer",
+#     "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+#   }
+# }
