@@ -81,8 +81,8 @@ class CreateStripeCheckoutSessionView(APIView):
                         
                     }
                 ],
-                success_url=f"{request.build_absolute_uri('/api/v1/payments/stripe/success/')}?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{request.build_absolute_uri('/api/v1/payments/stripe/cancel/')}",
+                success_url=f"{settings.FONTEND_SUCCESSFUL_URL}/en/dashboard",
+                cancel_url=f"{settings.FONTEND_SUCCESSFUL_URL}/en/dashboard",
                 metadata={
                     "payment_id": str(payment.id),
                     "order_id": str(order.id),
