@@ -745,3 +745,43 @@ class AdminAnalyticsView(APIView):
         )
         
         
+# admin profile update view
+class AdminProfileUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        user = request.user
+
+        # Optional: ensure only admin can update
+        if user.role != "owner":
+            return APIResponse.error(
+                message="Only owner can update profile.",
+                status_code=403
+            )
+
+        serializer = AdminUserUpdateSerializer(
+            user, data=request.data, partial=True, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Admin profile updated successfully.",
+                data=serializer.data,
+                status_code=200
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            data=serializer.errors,
+            status_code=400
+        )
+        
+    def get(self, request):
+        user = request.user
+        serializer = AdminUserUpdateSerializer(user,context={"request": request})
+        return APIResponse.success(
+            message="Admin profile retrieved successfully.",
+            data=serializer.data,
+            status_code=200
+        )

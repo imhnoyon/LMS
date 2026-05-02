@@ -271,16 +271,7 @@ class SectionView(APIView):
             return APIResponse.success(data=serializer.data, status_code=status.HTTP_201_CREATED)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
     
-    def get(self, request, pk):
-        course = get_course_with_permission(pk, request.user)
-        if not course:
-            return APIResponse.error(message="Access denied or course not found.", status_code=403)
-            
-        sections = Section.objects.filter(course=course).order_by("order")
-        serializer = SectionSerializer(sections, many=True, context={"request": request})
-        return APIResponse.success(data=serializer.data)
-    
-
+ 
     def patch(self, request, pk, section_id):
         course = get_course_with_permission(pk, request.user)
         if not course:
@@ -292,6 +283,21 @@ class SectionView(APIView):
             serializer.save()
             return APIResponse.success(data=serializer.data)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    
+    def get(self, request, pk, section_id=None):
+        course = get_course_with_permission(pk, request.user)
+        if not course:
+            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            
+        if section_id:
+            section = get_object_or_404(Section, pk=section_id, course=course)
+            serializer = SectionSerializer(section, context={"request": request})
+            return APIResponse.success(data=serializer.data)
+
+        sections = Section.objects.filter(course=course).order_by("order")
+        serializer = SectionSerializer(sections, many=True, context={"request": request})
+        return APIResponse.success(data=serializer.data)
 
     def delete(self, request, pk, section_id):
         course = get_course_with_permission(pk, request.user)
@@ -467,6 +473,19 @@ class QuizView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+        
+        
+    def get(self, request, section_id, quiz_id=None):
+        section = get_object_or_404(Section, pk=section_id)
+        if quiz_id:
+            quiz = get_object_or_404(Quiz, pk=quiz_id, section_id=section_id)
+            serializer = QuizSerializer(quiz, context={"request": request})
+            return APIResponse.success(data=serializer.data)
+
+        quizzes = Quiz.objects.filter(section_id=section_id).order_by("order")
+        serializer = QuizSerializer(quizzes, many=True, context={"request": request})
+        return APIResponse.success(data=serializer.data)
+    
 
 # ── Step 4: Publish 
 class PublishCourseView(APIView):

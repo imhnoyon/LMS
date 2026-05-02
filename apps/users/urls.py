@@ -25,5 +25,8 @@ urlpatterns = [
     path("admin/payments/", AdminPaymentsDeshboardView.as_view(), name="admin-payments"),
     path("admin/analytics/", AdminAnalyticsView.as_view(), name="admin-analytics"),
     
+    #admin profile update
+    path("admin/profile/update/", AdminProfileUpdateAPIView.as_view()),
+    
     
 ]
