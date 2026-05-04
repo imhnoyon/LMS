@@ -52,5 +52,6 @@ urlpatterns = [
     
     #course details page for instructor
     path("my-courses/<int:pk>/", views.MyCourseDetailsAPIView.as_view()),
+    path('courses/<int:course_id>/sections/', views.CourseSectionAPIView.as_view()),
 
 ]

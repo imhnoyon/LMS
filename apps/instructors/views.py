@@ -658,3 +658,16 @@ class InstructorCertificateListView(APIView):
             data=serializer.data,
             message="Instructor accepted courses retrieved successfully."
         )
+        
+        
+        
+class MyInstructorProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instructor = get_object_or_404(
+            Instructor.objects.select_related('user').prefetch_related('user__courses', 'user__courses__reviews', 'user__courses__reviews__user'),
+            user=request.user
+        )
+        serializer = InstructorProfileDetailSerializer(instructor,context={'request': request})
+        return APIResponse.success(message="Instructor profile retrieved successfully.", data=serializer.data)

@@ -486,6 +486,14 @@ class QuizView(APIView):
         serializer = QuizSerializer(quizzes, many=True, context={"request": request})
         return APIResponse.success(data=serializer.data)
     
+    def delete(self, request, section_id, quiz_id):
+        quiz = get_object_or_404(Quiz, pk=quiz_id, section_id=section_id)
+        if not get_course_with_permission(quiz.section.course.id, request.user):
+            return APIResponse.error(message="Access denied.", status_code=403)
+            
+        quiz.delete()
+        return APIResponse.success(message="Quiz deleted successfully.")
+    
 
 # ── Step 4: Publish 
 class PublishCourseView(APIView):
@@ -1179,3 +1187,18 @@ class CourseOverviewAPIView(APIView):
             "message": "Course overview retrieved successfully.",
             "data": serializer.data
         }, status=200)
+        
+        
+class CourseSectionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        sections = (
+            Section.objects
+            .filter(course_id=course_id)
+            .prefetch_related('lectures', 'quizzes')
+            .order_by('order')
+        )
+
+        serializer = sectiondetailserializer(sections, many=True,context={"request": request})
+        return Response(serializer.data)

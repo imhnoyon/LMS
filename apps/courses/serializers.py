@@ -189,10 +189,19 @@ class LectureSerializer(serializers.ModelSerializer):
 
 class SectionSerializer(serializers.ModelSerializer):
     lectures = LectureSerializer(many=True, read_only=True)
+    quizze_id = serializers.SerializerMethodField()
+    quizz_title = serializers.SerializerMethodField()
     class Meta:
         model = Section
-        fields = ['id', 'name', 'order', 'lectures']
+        fields = ['id','quizze_id','quizz_title', 'name', 'order', 'lectures', ]
 
+    def get_quizze_id(self, obj):
+        quiz = Quiz.objects.filter(section=obj).first()
+        return quiz.id if quiz else None
+    
+    def get_quizz_title(self, obj):
+        quiz = Quiz.objects.filter(section=obj).first()
+        return quiz.title if quiz else None
 
 
 class QuestionOptionSerializer(serializers.ModelSerializer):
@@ -232,7 +241,15 @@ class QuizSerializer(serializers.ModelSerializer):
             'questions'
         ]
         
-        
+
+class sectiondetailserializer(serializers.ModelSerializer):
+    lectures = LectureSerializer(many=True, read_only=True)
+    quizzes = QuizSerializer(many=True, read_only=True)
+    class Meta:
+        model = Section
+        fields = ['id', 'name', 'order', 'lectures', 'quizzes']    
+    
+    
     
 # Course details serializers
 class CourseAdvanceInfoDetailSerializer(serializers.ModelSerializer):

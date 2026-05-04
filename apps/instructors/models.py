@@ -49,6 +49,11 @@ class Instructor(models.Model):
         db_table = "instructors"
         ordering = ["-created_at"]
         
+    @property
+    def courses(self):
+        """Access courses through the related user"""
+        return self.user.courses.all()
+
     def Instructor_name(self):
         if self.user.name:
             return f"{self.user.name}"

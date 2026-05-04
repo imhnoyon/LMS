@@ -25,4 +25,7 @@ urlpatterns = [
     # signature upload
     path("upload-signature/", SignatureUploadAPIView.as_view(), name="upload-signature"),
     path("get-signature/", MyInstructorSignatureAPIView.as_view(), name="get-signature"),
+    
+    # Instructor own profile 
+    path('instructor/me/', MyInstructorProfileAPIView.as_view()),
 ]
