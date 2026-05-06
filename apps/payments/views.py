@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
 from apps.affiliates.models import Affiliate, AffiliateCommission
+from apps.notifications.models import Notification
 from apps.organizations.models import Membership, Organization
 from apps.users.models import User
 from utils.api_response import APIResponse
@@ -244,6 +245,8 @@ class StripeWebhookView(APIView):
             return method_type
         except Exception:
             return "stripe"
+    
+    
 
     def _mark_payment_success(self, payment, session, payment_method):
         payment_intent_id = getattr(session, "payment_intent", None)
@@ -1281,3 +1284,40 @@ class  OrganizationWithdrawRequestView(APIView):
                 "status": withdrawal.status,
             }
         )
+        
+    
+## This method can be called from the Enrollment model when a course is purchased to send notifications to the student, instructor, and organization admin (if applicable).if needed then integrated    
+def notify_course_purchase(self, enrollment):
+    student = enrollment.student
+    course = enrollment.course
+
+    # 1️⃣ Notify Student
+    Notification.objects.create(
+        user=student.user,
+        type="purchase",
+        title="Purchase Successful",
+        body=f"You have successfully purchased the course: {course.title}"
+    )
+
+    # 2️⃣ Notify Instructor
+    if course.instructor and course.instructor.user:
+        Notification.objects.create(
+            user=course.instructor.user,
+            type="purchase",
+            title="New Course Purchase",
+            body=f"Your course '{course.title}' was purchased by {student.user.username}"
+        )
+
+    # 3️⃣ Notify Organization Admin (if exists)
+    if course.organization:
+        admin_members = course.organization.memberships.filter(
+            role="ADMIN"
+        ).select_related("user")
+
+        for member in admin_members:
+            Notification.objects.create(
+                user=member.user,
+                type="purchase",
+                title="Course Revenue Generated",
+                body=f"Your organization course '{course.title}' was purchased."
+            )
