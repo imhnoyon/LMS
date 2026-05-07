@@ -9,7 +9,7 @@ from apps.enrollments.models import Enrollment
 from apps.payments.models import Commission, Payment
 from utils.permissions import IsInstructor, IsOrganization
 from .models import Organization, Membership, Invitation
-from .serializers import LiveSessionUploaderSerializer, OrganizationMembershipSerializer, UnverifiedOrganizationListSerializer, InvitationSerializer
+from .serializers import LiveSessionUploaderSerializer, OrganizationAdminSerializer, OrganizationMembershipSerializer, UnverifiedOrganizationListSerializer, InvitationSerializer
 from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from rest_framework import status
@@ -104,10 +104,7 @@ class InviteInstructorView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        membership = Membership.objects.filter(
-            user=request.user, 
-            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
-        ).first()
+        membership = Membership.objects.filter(user=request.user, role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]).first()
 
         if not membership:
             return APIResponse.error(
@@ -723,5 +720,78 @@ class OrganizationEarningsDashboardView(APIView):
                 # "pending_earnings": pending_earnings,
                 # "available_earnings": available_earnings,
             },
+            status_code=200
+        )
+        
+        
+        
+        
+class OrganizationAdminListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get("search", "").strip()
+        status_param = request.query_params.get("status", "").strip().upper()
+
+        organizations = Organization.objects.prefetch_related(
+            "memberships__user"
+        ).all()
+
+        if search:
+            organizations = organizations.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(memberships__role=Membership.Role.ADMIN, memberships__user__name__icontains=search) |
+                Q(memberships__role=Membership.Role.ADMIN, memberships__user__email__icontains=search)
+            ).distinct()
+
+        if status_param:
+            if status_param == "ACTIVE":
+                organizations = organizations.filter(is_active=True)
+
+            elif status_param == "INACTIVE":
+                organizations = organizations.filter(is_active=False)
+
+            elif status_param == "VERIFIED":
+                organizations = organizations.filter(is_verified=True)
+
+            elif status_param == "UNVERIFIED":
+                organizations = organizations.filter(is_verified=False)
+
+        paginator = self.pagination_class()
+
+        paginated_queryset = paginator.paginate_queryset(
+            organizations,
+            request
+        )
+
+        serializer = OrganizationAdminSerializer(
+            paginated_queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Organizations retrieved successfully."
+        )
+        
+        
+class OrganizationAdminDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        organization = get_object_or_404(Organization, pk=pk)
+
+        serializer = OrganizationAdminSerializer(
+            organization,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Organization details retrieved successfully.",
+            data=serializer.data,
             status_code=200
         )

@@ -149,4 +149,38 @@ class LiveSessionUploaderSerializer(serializers.ModelSerializer):
         
         
         
+        
+class OrganizationAdminSerializer(serializers.ModelSerializer):
+    owner_name = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = ["id","name","bio","photo","banner","phone","email","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at","avatar",]
+
+    def get_owner_name(self, obj):
+        owner_membership = obj.owner
+        if owner_membership and owner_membership.user:
+            return owner_membership.user.name
+        return None
+
+    def get_owner_email(self, obj):
+        owner_membership = obj.owner
+        if owner_membership and owner_membership.user:
+            return owner_membership.user.email
+        return None
+
+    def get_avatar(self, obj):
+        owner_membership = obj.owner
+        if owner_membership and owner_membership.user and getattr(owner_membership.user, 'avatar', None):
+            request = self.context.get('request')
+            try:
+                return request.build_absolute_uri(owner_membership.user.avatar.url) if request else owner_membership.user.avatar.url
+            except Exception:
+                return owner_membership.user.avatar.url
+        return None
+
+        
+        
     

@@ -327,3 +327,103 @@ class InstructorProfileDetailSerializer(serializers.ModelSerializer):
         all_reviews = Review.objects.filter(course__in=courses).select_related('user', 'course').order_by('-created_at')
         serializer = ReviewSerializer(all_reviews, many=True, context=self.context)
         return serializer.data
+    
+    
+    
+# Serializer for instructor's profile view
+class InstructorProfileListSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="user.name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True)
+    avatar = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    code = serializers.CharField(source="id", read_only=True)
+    total_earned = serializers.SerializerMethodField()
+    created_date = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Instructor
+        fields = [
+            'id', 'name', 'email', 'phone', 'avatar', 'title', 'biography','type', 'status', 'code', 'total_earned', 'created_date'
+        ]
+        read_only_fields = ['id', 'name', 'email', 'phone', 'avatar', 'code', 'total_earned', 'created_date']
+
+    def get_type(self, obj):
+        return 'Instructor'
+    def get_avatar(self, obj):
+        if obj.user.avatar:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.user.avatar.url) if request else obj.user.avatar.url
+        return None
+
+    def get_status(self, obj):
+        user = getattr(obj, 'user', None)
+        if user and not user.is_active:
+            return 'SUSPENDED'
+        if obj.is_approved:
+            return 'ACTIVE'
+        return 'PENDING'
+
+    def get_total_earned(self, obj):
+        from django.db.models import Sum
+        from apps.payments.models import Commission
+
+        total = Commission.objects.filter(user=obj.user).aggregate(total=Sum('commission_amount'))['total']
+        if total is None:
+            return 0
+        return total
+
+    def get_created_date(self, obj):
+        if obj.created_at:
+            return obj.created_at
+        return None
+    
+    
+class AdminInstructorProfileListSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="user.name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True)
+    avatar = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    code = serializers.CharField(source="id", read_only=True)
+    total_earned = serializers.SerializerMethodField()
+    created_date = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Instructor
+        fields = [
+            'id', 'name', 'email', 'phone', 'avatar', 'title', 'biography','website','twitter','linkedin','youtube','type', 'status', 'code', 'total_earned', 'created_date'
+        ]
+        read_only_fields = ['id', 'name', 'email', 'phone', 'avatar', 'code', 'total_earned', 'created_date']
+
+    def get_type(self, obj):
+        return 'Instructor'
+    def get_avatar(self, obj):
+        if obj.user.avatar:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.user.avatar.url) if request else obj.user.avatar.url
+        return None
+
+    def get_status(self, obj):
+        user = getattr(obj, 'user', None)
+        if user and not user.is_active:
+            return 'SUSPENDED'
+        if obj.is_approved:
+            return 'ACTIVE'
+        return 'PENDING'
+
+    def get_total_earned(self, obj):
+        from django.db.models import Sum
+        from apps.payments.models import Commission
+
+        total = Commission.objects.filter(user=obj.user).aggregate(total=Sum('commission_amount'))['total']
+        if total is None:
+            return 0
+        return total
+
+    def get_created_date(self, obj):
+        if obj.created_at:
+            return obj.created_at
+        return None

@@ -25,4 +25,8 @@ urlpatterns = [
     # Organization Earnings Dashboard
     path("organization-deshboard/", OrganizationDashboardView.as_view(), name="organization-earnings"),
     path("organization-earnings/dashboard/",OrganizationEarningsDashboardView.as_view(),name="organization-earnings-dashboard"),
+    
+    
+     path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
+     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
 ]

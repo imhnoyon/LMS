@@ -2,11 +2,16 @@ from django.urls import path
 from apps.instructors.views import *
 
 urlpatterns = [
+    # instructor management by admin
     path("pending-instructors/", PendingInstructorListView.as_view(), name="pending-instructors"),
     path("approve-instructor/<str:pk>/", ApproveInstructorView.as_view(), name="approve-instructor"),
     path("feature-instructor/<str:pk>/", FeatureApprovedInstructorView.as_view(), name="feature-instructor"),
     path("delete-instructor/<str:pk>/", DeleteInstructorView.as_view(), name="delete-instructor"),
     path("withdrawals/", WithdrawalRequestListView.as_view(),name="withdrawal-list"),
+    path('instructors-list-admin/',InstructorListAPIView.as_view(),name='instructor-list'),
+    path('instructors-details/<str:pk>/',AdminInstructorDetailAPIView.as_view(),name='instructor-list'),
+    path('instructor-list-shown-by-admin/',AdminInstructorListAPIView.as_view(),name='instructor-list-shown-by-admin'), 
+    
     
     
     # course list seen by instructor approve or not
@@ -28,4 +33,8 @@ urlpatterns = [
     
     # Instructor own profile 
     path('instructor/me/', MyInstructorProfileAPIView.as_view()),
+    
+    
+    
+    
 ]

@@ -671,3 +671,157 @@ class MyInstructorProfileAPIView(APIView):
         )
         serializer = InstructorProfileDetailSerializer(instructor,context={'request': request})
         return APIResponse.success(message="Instructor profile retrieved successfully.", data=serializer.data)
+    
+
+# Instructor List API for public listing
+class InstructorListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    def get(self, request,):
+        search = request.query_params.get("search", "").strip()
+        status_param = request.query_params.get("status", "").strip().upper()
+        include_top_param = request.query_params.get("include_top", "").strip().lower() in ("1", "true", "yes")
+
+        instructors = Instructor.objects.select_related("user").all()[:20]
+
+        if search:
+            instructors = instructors.filter(
+                Q(user__name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(user__phone__icontains=search) |
+                Q(id__icontains=search) |
+                Q(title__icontains=search)
+            )
+
+        if status_param:
+            if status_param == "ACTIVE":
+                instructors = instructors.filter(is_approved=True, user__is_active=True)
+            elif status_param == "PENDING":
+                instructors = instructors.filter(is_approved=False, user__is_active=True)
+            elif status_param == "SUSPENDED":
+                instructors = instructors.filter(user__is_active=False)
+
+        serializer = InstructorProfileListSerializer(instructors, many=True, context={"request": request})
+
+        # show top performers by default when user is not searching or filtering
+        include_top = include_top_param or (not search and not status_param)
+
+        # If frontend requests top performers, compute top 5 earners (by Commission)
+        if include_top:
+            from apps.payments.models import Commission
+            from django.db.models import Sum, Count
+
+            # Restrict commissions to users who are instructors
+            instructor_user_ids = Instructor.objects.values_list('user', flat=True)
+
+            top_qs = (
+                Commission.objects
+                .filter(user__in=instructor_user_ids)
+                .values('user')
+                .annotate(total_earned=Sum('commission_amount'), sales_count=Count('id'))
+                .order_by('-total_earned')[:5]
+            )
+
+            top_performers = []
+            for idx, item in enumerate(top_qs, start=1):
+                uid = item.get('user')
+                total = item.get('total_earned') or 0
+                sales = item.get('sales_count') or 0
+                user_obj = None
+                try:
+                    from apps.users.models import User as UserModel
+                    user_obj = UserModel.objects.filter(id=uid).first()
+                except Exception:
+                    user_obj = None
+
+                name = user_obj.name if user_obj and getattr(user_obj, 'name', None) else (user_obj.email if user_obj else None)
+                avatar = None
+                if user_obj and getattr(user_obj, 'avatar', None):
+                    req = request
+                    try:
+                        avatar = req.build_absolute_uri(user_obj.avatar.url) if req else user_obj.avatar.url
+                    except Exception:
+                        avatar = user_obj.avatar.url
+
+                # try to include instructor code/id
+                instr = Instructor.objects.filter(user_id=uid).first()
+                code = instr.id if instr else None
+
+                top_performers.append({
+                    'rank': idx,
+                    'user_id': uid,
+                    'name': name,
+                    'avatar': avatar,
+                    'code': code,
+                    'total_earned': format(total, '.2f'),
+                    'sales_count': sales,
+                })
+
+            return APIResponse.success(
+                message="Instructors retrieved successfully.",
+                data={
+                    'top_performers': top_performers,
+                    'instructors': serializer.data,
+                }
+            )
+
+        return APIResponse.success(message="Instructors retrieved successfully.", data=serializer.data)
+    
+    
+    
+class AdminInstructorDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        instructor = get_object_or_404(
+            Instructor.objects.select_related('user').prefetch_related('user__courses', 'user__courses__reviews', 'user__courses__reviews__user'),
+            id=pk
+        )
+        serializer = InstructorProfileDetailSerializer(instructor, context={'request': request})
+        return APIResponse.success(message="Instructor profile retrieved successfully.", data=serializer.data)
+    
+    
+    
+    
+class AdminInstructorListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+    def get(self, request,):
+        search = request.query_params.get("search", "").strip()
+        status_param = request.query_params.get("status", "").strip().upper()
+
+        instructors = Instructor.objects.select_related("user").all()
+
+        if search:
+            instructors = instructors.filter(
+                Q(user__name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(user__phone__icontains=search) |
+                Q(id__icontains=search) |
+                Q(title__icontains=search)
+            )
+
+        if status_param:
+            if status_param == "ACTIVE":
+                instructors = instructors.filter(is_approved=True, user__is_active=True)
+            elif status_param == "PENDING":
+                instructors = instructors.filter(is_approved=False, user__is_active=True)
+            elif status_param == "SUSPENDED":
+                instructors = instructors.filter(user__is_active=False)
+
+        paginator = self.pagination_class()
+        paginated_queryset = paginator.paginate_queryset(
+            instructors,
+            request
+        )
+
+        serializer = AdminInstructorProfileListSerializer(
+            paginated_queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Instructors retrieved successfully."
+        )
+        

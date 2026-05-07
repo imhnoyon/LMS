@@ -706,7 +706,7 @@ class InstructorLiveClassStatsView(APIView):
         past_sessions = live_classes.filter(
             Q(scheduled_date__lt=now.date()) | 
             Q(scheduled_date=now.date(), scheduled_time__lte=now.time())
-        ).order_by('-scheduled_date', '-scheduled_time')
+        ).order_by('-scheduled_date', '-scheduled_time')[:15]
         
         upcoming_live_classes_count = upcoming_sessions.count()
         
