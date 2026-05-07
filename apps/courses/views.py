@@ -171,7 +171,7 @@ class CourseAdvanceInfoManageView(APIView):
     def patch(self, request, pk):
         course = get_course_with_permission(pk, request.user)
         if not course:
-            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            return APIResponse.error(message="Access denied or course not found.",status_code=403)
             
         advance_info = CourseAdvanceInfo.objects.filter(course=course).first()
 
@@ -248,7 +248,7 @@ class CourseAdvanceView(APIView):
     def post(self, request, pk):
         course = get_course_with_permission(pk, request.user)
         if not course:
-            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            return APIResponse.error(message="Access denied or course not found.",status_code=403)
             
         serializer = CourseAdvanceInfoSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
@@ -263,7 +263,7 @@ class SectionView(APIView):
     def post(self, request, pk):
         course = get_course_with_permission(pk, request.user)
         if not course:
-            return APIResponse.error(message="Access denied or course not found.", status_code=403)
+            return APIResponse.error(message="Access denied or course not found.",status_code=403)
             
         serializer = SectionSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
