@@ -653,6 +653,7 @@ class CourseListByOrganizationView(APIView):
     def get(self, request):
         search = request.query_params.get('search')
         category = request.query_params.get('category')
+        category_id = request.query_params.get('category_id') or request.query_params.get('categoryId')
         status_param = request.query_params.get('status')
 
         membership = Membership.objects.filter(user=request.user, status=Membership.Status.ACTIVE).first()
@@ -671,8 +672,22 @@ class CourseListByOrganizationView(APIView):
                 Q(level__icontains=search)
             )
 
-        if category:
-            courses = courses.filter(category__name__iexact=category)
+        # Allow filtering directly by numeric category id via `category_id` (preferred)
+        if category_id:
+            cid = category_id.strip()
+            if cid.isdigit():
+                courses = courses.filter(category_id=int(cid))
+        elif category:
+            # Support filtering by category name (exact or partial), slug, or numeric id
+            cat = category.strip()
+            if cat.isdigit():
+                courses = courses.filter(category_id=int(cat))
+            else:
+                courses = courses.filter(
+                    Q(category__name__iexact=cat) |
+                    Q(category__slug__iexact=cat) |
+                    Q(category__name__icontains=cat)
+                )
         if status_param:
             courses = courses.filter(status__iexact=status_param)
 

@@ -1013,7 +1013,7 @@ class MarkLiveClassPresentAPIView(APIView):
         
         
 class MyCourseDetailsAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsAuthenticated,]
 
     def get(self, request, pk):
         course = get_object_or_404(
