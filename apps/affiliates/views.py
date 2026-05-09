@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.db.models import Q
 from apps.courses.models import Course
 from apps.instructors.serializers import WithdrawalRequestSerializer
+from apps.notifications.models import Notification
 from apps.orders.models import Order, OrderItem
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Affiliate, AffiliateCourseLink, AffiliateCommission
@@ -28,7 +29,7 @@ class AffiliateListView(APIView):
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
 
-        affiliates = Affiliate.objects.select_related("user").all()
+        affiliates = Affiliate.objects.filter(status="pending").select_related("user")
 
         #search filter
         if search:
@@ -76,6 +77,15 @@ class UpdateAffiliateStatusView(APIView):
             )
 
         serializer.save()
+        affiliates=serializer.instance
+        notifications = [
+            Notification(
+                user=affiliates.user,
+                type='Account Approved',
+                title='Account Approved',
+                body = (f"Congratulations! Your affiliate account has been "f"successfully approved by "f"{request.user.name or request.user.email}."))  
+        ]
+        Notification.objects.bulk_create(notifications)
 
         return APIResponse.success(
             message="Affiliate status updated successfully.",
