@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from apps.enrollments.models import Enrollment
 from apps.payments.models import Commission
 from apps.organizations.models import Membership
+from apps.instructors.models import Instructor
 
 # Helper function to check course ownership or organization access
 def get_course_with_permission(course_id, user):
@@ -89,6 +90,20 @@ class CourseCreateView(APIView):
                 ).first()
                 if membership:
                     organization = membership.organization
+                    # Check if organization is verified
+                    if not organization.is_verified:
+                        return APIResponse.error(
+                            message="Your organization is not verified. Please wait for admin verification before creating courses.",
+                            status_code=status.HTTP_403_FORBIDDEN
+                        )
+            else:
+                # For individual instructors, check if instructor is approved
+                instructor = Instructor.objects.filter(user=request.user).first()
+                if not instructor or not instructor.is_featured:
+                    return APIResponse.error(
+                        message="Before admin approval, you cannot create a course. Please wait for the approval.",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
             
             course = serializer.save(instructor=request.user, organization=organization)
             return APIResponse.success(data={'id': course.id, **serializer.data}, status_code=status.HTTP_201_CREATED)
@@ -672,12 +687,13 @@ class courseDetail(APIView):
         course.save()
         
         # Notify instructor/organization about the review result
+        user= course.instructor or course.organization
         notifications = [
             Notification(
-                user=request.user,
+                user=user,
                 type='course_Accepted' if status_value == "accepted" else 'course_Rejected',
                 title='Course Reviewed',
-                body=f"Your course '{course.title}' has been {status_value} by the admin."
+                body=f"Your course {course.title} has been {status_value} by the {request.user.name}."
             )
             
         ]
