@@ -12,8 +12,6 @@ urlpatterns = [
     path('instructors-details/<str:pk>/',AdminInstructorDetailAPIView.as_view(),name='instructor-list'),
     path('instructor-list-shown-by-admin/',AdminInstructorListAPIView.as_view(),name='instructor-list-shown-by-admin'), 
     
-    
-    
     # course list seen by instructor approve or not
     path("courses/", CourseListView.as_view(), name="course-list"),
     

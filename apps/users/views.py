@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework import status
 from apps.courses.models import Course
+from apps.notifications.models import Notification
 from apps.organizations.models import Invitation, Organization, User
 from apps.organizations.serializers import OrganizationRegisterSerializer
 from apps.instructors.serializers import InstructorRegisterSerializer   
@@ -61,7 +62,22 @@ class RegisterAPIView(APIView):
         )
         if user.email:
             send_verification_email(user.email, code)
-       
+            
+        admins = User.objects.filter(role='owner')
+        # admin notification
+        display_name = user.name or user.email
+        notifications = [
+            Notification(
+                user=admin,
+                type='New User Registration',
+                title='New User Registered',
+                body=f"A new {user.role} {display_name}  has registered."
+            )
+            for admin in admins
+        ]
+
+        Notification.objects.bulk_create(notifications)
+
         return APIResponse.success(
             message="Registration completed successfully.OTP sent to your email for verification.",
             data={"id": str(user.id)},

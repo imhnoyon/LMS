@@ -136,7 +136,7 @@ class CourseListView(APIView):
         language = request.query_params.get("language")
         level = request.query_params.get("level")
 
-        courses = Course.objects.all().order_by("-id")
+        courses = Course.objects.filter(instructor=request.user).order_by("-id")
 
         if search:
             courses = courses.filter(
@@ -157,17 +157,15 @@ class CourseListView(APIView):
         if level:
             courses = courses.filter(level__iexact=level)
 
-        # top summary stats
-        all_course_stats = Course.objects.aggregate(
-            approved_courses=Count("id", filter=Q(status="Accepted")),
-            published_courses=Count("id", filter=Q(status="Published")),
-            pending_review_courses=Count("id", filter=Q(status="Draft")),
-            
+        # top summary stats (for this instructor)
+        all_course_stats = Course.objects.filter(instructor=request.user).aggregate(
+            approved_courses=Count("id", filter=Q(status="accepted")),
+            published_courses=Count("id", filter=Q(status="published")),
+            pending_review_courses=Count("id", filter=Q(status="draft")),
         )
         print("Course stats:", all_course_stats)
-        
-        certificates_issued = Course.objects.filter(enrollments__is_completed=True).distinct().count()
-        ratings_people = Review.objects.values("course").annotate(count=Count("id")).count()
+        certificates_issued = Course.objects.filter(instructor=request.user, enrollments__is_completed=True).distinct().count()
+        ratings_people = Review.objects.filter(course__instructor=request.user).values("course").annotate(count=Count("id")).count()
         
 
         paginator = self.pagination_class()

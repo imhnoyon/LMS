@@ -15,10 +15,7 @@ class InstructorRegisterSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "password": {"write_only": True, "min_length": 8}
         }
-    def validate_name(self, value):
-        if User.objects.filter(name=value).exists():
-            raise serializers.ValidationError("Name already exists.")
-        return value
+   
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email already exists.")
