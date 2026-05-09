@@ -164,6 +164,8 @@ class CourseListView(APIView):
             pending_review_courses=Count("id", filter=Q(status="Draft")),
             
         )
+        print("Course stats:", all_course_stats)
+        
         certificates_issued = Course.objects.filter(enrollments__is_completed=True).distinct().count()
         ratings_people = Review.objects.values("course").annotate(count=Count("id")).count()
         

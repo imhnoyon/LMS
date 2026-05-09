@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Q, Avg, Count, Sum
 from django.db.models.functions import TruncDate
+from apps.notifications.models import Notification
 from utils.helper_functions import parse_duration_to_days
 from utils.permissions import IsInstructor, IsOrganization, IsInstructorOrOrganization, IsStudent
 from .models import *
@@ -101,6 +102,19 @@ class CourseCreateView(APIView):
         serializer = CourseBasicSerializer(course, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            
+            # Notify enrolled students about course updates
+            notifications = [
+            Notification(
+                user=student,
+                type='course_updated', 
+                title='Course Updated',
+                body=f"The course '{course.title}' has been updated by the instructor. Please check the course for any updates or changes."
+            )
+            for student in User.objects.filter(enrollments__course=course).distinct()
+           ]
+            Notification.objects.bulk_create(notifications)
+            
             return APIResponse.success(data=serializer.data)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
     
@@ -190,7 +204,17 @@ class CourseAdvanceInfoManageView(APIView):
 
         if serializer.is_valid():
             serializer.save()
-
+            # Notify enrolled students about course updates
+            notifications = [
+            Notification(
+                user=student,
+                type='course_updated', 
+                title='Course Updated',
+                body=f"The course '{course.title}' has been updated by the instructor. Please check the course for any updates or changes."
+            )
+            for student in User.objects.filter(enrollments__course=course).distinct()
+           ]
+            Notification.objects.bulk_create(notifications)
             return APIResponse.success(
                 message="Course advance info updated successfully.",
                 data=serializer.data,
@@ -281,6 +305,17 @@ class SectionView(APIView):
         serializer = SectionSerializer(section, data=request.data, partial=True, context={"request": request})
         if serializer.is_valid():
             serializer.save()
+            # Notify enrolled students about course updates
+            notifications = [
+            Notification(
+                user=student,
+                type='course_updated', 
+                title='Course Updated',
+                body=f"The course '{course.title}' has been updated by the instructor. Please check the course for any updates or changes."
+            )
+            for student in User.objects.filter(enrollments__course=course).distinct()
+           ]
+            Notification.objects.bulk_create(notifications)
             return APIResponse.success(data=serializer.data)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
     
@@ -341,6 +376,8 @@ class LectureView(APIView):
         if not get_course_with_permission(lecture.section.course.id, request.user):
             return APIResponse.error(message="Access denied.", status_code=403)
 
+        course = lecture.section.course
+
         serializer = LectureSerializer(
             lecture,
             data=request.data,
@@ -350,6 +387,19 @@ class LectureView(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # Notify enrolled students about course updates
+            notifications = [
+                Notification(
+                    user=student,
+                    type='Lecture_Updated',
+                    title='Lecture Updated',
+                    body=f"The lecture in course '{course.title}' has been updated by the instructor. Please check the lecture for any updates or changes."
+                )
+                for student in User.objects.filter(enrollments__course=course).distinct()
+            ]
+            Notification.objects.bulk_create(notifications)
+            
             return APIResponse.success(
                 message="Lecture updated successfully.",
                 data=serializer.data,
@@ -506,6 +556,21 @@ class PublishCourseView(APIView):
             
         course.status = 'published'
         course.save()
+        
+        # Notify all admins about the new course publication
+        admins = User.objects.filter(role='owner')
+        # admin notification
+        notifications = [
+            Notification(
+                user=admin,
+                type='course_Created',
+                title='Course Created',
+                body=f"A new course {course.title} has been Created by {request.user.name}."
+            )
+            for admin in admins
+        ]
+
+        Notification.objects.bulk_create(notifications)
         return APIResponse.success(data={'status': 'published'})
     
     
@@ -605,6 +670,18 @@ class courseDetail(APIView):
         elif status_value == "rejected":
             course.status = "rejected"
         course.save()
+        
+        # Notify instructor/organization about the review result
+        notifications = [
+            Notification(
+                user=request.user,
+                type='course_Accepted' if status_value == "accepted" else 'course_Rejected',
+                title='Course Reviewed',
+                body=f"Your course '{course.title}' has been {status_value} by the admin."
+            )
+            
+        ]
+        Notification.objects.bulk_create(notifications)
         
         CourseReviewHistory.objects.create(
             course=course,
