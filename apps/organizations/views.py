@@ -1,15 +1,15 @@
 import calendar
 
-from rest_framework.views import APIView
+from rest_framework.views import APIView, Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
 from apps.courses.models import Course, LiveClass, Review
 from apps.courses.serializers import CourseDetailSerializer, LiveClassSerializer
 from apps.enrollments.models import Enrollment
-from apps.payments.models import Commission, Payment
+from apps.payments.models import Commission, Payment, Withdrawal
 from utils.permissions import IsInstructor, IsOrganization
 from .models import Organization, Membership, Invitation
-from .serializers import LiveSessionUploaderSerializer, OrganizationAdminSerializer, OrganizationMembershipSerializer, UnverifiedOrganizationListSerializer, InvitationSerializer
+from .serializers import LiveSessionUploaderSerializer, OrganizationAdminSerializer, OrganizationEarningsSerializer, OrganizationMembershipSerializer, UnverifiedOrganizationListSerializer, InvitationSerializer
 from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from rest_framework import status
@@ -20,7 +20,7 @@ from apps.users.models import User
 from utils.emails import send_invitation_email
 from decimal import Decimal
 from django.db.models.functions import TruncDate, TruncMonth
-from datetime import timedelta
+from datetime import date, timedelta
 
 
 # View to list unverified organizations for admin review
@@ -809,4 +809,109 @@ class OrganizationAdminDetailAPIView(APIView):
             message="Organization details retrieved successfully.",
             data=serializer.data,
             status_code=200
+        )
+        
+        
+
+# View for organization  to see their earnings, withdrawals, and revenue stats        
+class OrganizationEarningsView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def get(self, request):
+        user = request.user
+        today = timezone.now().date()
+
+        total_revenue = Commission.objects.filter(user=user).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
+
+        total_withdrawals = Withdrawal.objects.filter( user=user, status="completed" ).aggregate( total=Sum("amount"))["total"] or Decimal("0.00")
+
+        today_revenue = Commission.objects.filter(user=user,created_at__date=today).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
+        
+        current_balance = total_revenue - total_withdrawals
+        
+        withdrawals_qs = Withdrawal.objects.filter(user=user).order_by("-requested_at")
+        
+        #  Daily revenue statistic for current month
+        month_start = today.replace(day=1)
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        month_end = today.replace(day=last_day)
+
+        revenue_rows = Commission.objects.filter(
+            user=user,
+            created_at__date__range=[month_start, month_end]
+        ).annotate(
+            day=TruncDate("created_at")
+        ).values("day").annotate(
+            total=Sum("commission_amount")
+        ).order_by("day")
+
+        # safe map
+        revenue_map = {
+            row["day"].strftime("%Y-%m-%d"): row["total"] or Decimal("0.00")
+            for row in revenue_rows
+        }
+
+        daily_revenue_chart = []
+        for day_num in range(1, last_day + 1):
+            current_day = date(today.year, today.month, day_num)
+            current_day_str = current_day.strftime("%Y-%m-%d")
+
+            daily_revenue_chart.append({
+                "label": current_day.strftime("%b %d"),
+                "amount": revenue_map.get(current_day_str, Decimal("0.00"))
+            })
+        serializer = OrganizationEarningsSerializer({
+            "total_revenue": total_revenue,
+            "total_withdrawals": total_withdrawals,
+            "current_balance": current_balance,
+            "today_revenue": today_revenue,
+            "withdrawals": withdrawals_qs,
+            "monthly_revenue_chart": daily_revenue_chart
+        })
+
+        return APIResponse.success(
+            message="Organization earnings fetched successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+# View to toggle membership status (active/suspend) for organization admins       
+class ToggleMembershipStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            membership = Membership.objects.select_related("user").get(id=pk)
+        except Membership.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Membership not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Toggle status
+        if membership.status == "active":
+            membership.status = "suspend"
+            message = "User suspended successfully"
+        else:
+            membership.status = "active"
+            message = "User activated successfully"
+
+        membership.save()
+
+        return Response(
+            {
+                "success": True,
+                "message": message,
+                "data": {
+                    "membership_id": membership.id,
+                    "user_id": membership.user.id,
+                    "user_name": membership.user.name,
+                    "status": membership.status,
+                }
+            },
+            status=status.HTTP_200_OK
         )

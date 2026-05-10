@@ -843,7 +843,7 @@ class ApproveWithdrawView(APIView):
             
 # Instructor view to cancel their pending withdrawal request           
 class InstructorCancelWithdrawView(APIView):
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsAuthenticated, IsInstructor, IsOrganization]  # Allow both Instructors and Organization Admins to cancel their own withdrawals
 
     @transaction.atomic
     def post(self, request, withdraw_id):

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from apps.courses.models import sessionRecordUploader
+from apps.payments.models import Withdrawal
 from apps.users.models import User
 from apps.organizations.models import Membership, Organization, Invitation
 from django.utils.timesince import timesince
@@ -184,3 +185,20 @@ class OrganizationAdminSerializer(serializers.ModelSerializer):
         
         
     
+# Earnings serializers
+class WithdrawalSerializer(serializers.ModelSerializer):
+   class Meta:
+        model = Withdrawal
+        fields = ['id','withdraw_id', 'user_name', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at']
+    
+class RevenueChartSerializer2(serializers.Serializer):
+    label = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+class OrganizationEarningsSerializer(serializers.Serializer):
+    total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_withdrawals = serializers.DecimalField(max_digits=12, decimal_places=2)
+    today_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    current_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    withdrawals = WithdrawalSerializer(many=True, read_only=True)
+    monthly_revenue_chart = RevenueChartSerializer2(many=True)

@@ -27,6 +27,10 @@ urlpatterns = [
     path("organization-earnings/dashboard/",OrganizationEarningsDashboardView.as_view(),name="organization-earnings-dashboard"),
     
     
-     path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
-     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
+    path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
+    path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
+     
+    path("organization/earnings/", OrganizationEarningsView.as_view(), name="organization-earnings"),
+    
+    path("membership/toggle/<int:pk>/", ToggleMembershipStatusAPIView.as_view(), name="toggle-membership-status"),
 ]

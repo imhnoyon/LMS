@@ -76,7 +76,7 @@ def send_reset_password_email(email, code):
 def send_invitation_email(email, organization_name, invitation_token, is_registered):
     subject = f"Learn Hub | Invitation from {organization_name}"
     
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:8002")
+    frontend_url = getattr(settings, "FRONTEND_URL", "https://rs0hfx59-8002.asse.devtunnels.ms/")
     
     if is_registered:
         link = f"{frontend_url}/invitations/respond?token={invitation_token}"
