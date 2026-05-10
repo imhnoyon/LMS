@@ -289,7 +289,11 @@ class OrganizationInstructorDashboardView(APIView):
             status=Invitation.Status.PENDING
         ).count()
 
-        total_courses = organization.total_courses
+        
+        org_courses = Course.objects.filter(organization=organization)
+        active_courses = org_courses.filter(
+            status__in=[ "accepted", "featured"]
+        ).count()
 
         return APIResponse.success(
             message="Organization instructor dashboard fetched successfully.",
@@ -298,7 +302,7 @@ class OrganizationInstructorDashboardView(APIView):
                     "total_instructors": total_instructors,
                     "active_instructors": active_instructors,
                     "pending_invitations": pending_invitations,
-                    "total_courses": total_courses,
+                    "total_courses": active_courses,
                 },
                 "memberships list": serializer.data,
             },
@@ -500,7 +504,7 @@ class OrganizationDashboardView(APIView):
         course_created = org_courses.count()
 
         active_courses = org_courses.filter(
-            status__in=["published", "accepted", "featured"]
+            status__in=[ "accepted", "featured"]
         ).count()
 
         students_enrolled = Enrollment.objects.filter(
