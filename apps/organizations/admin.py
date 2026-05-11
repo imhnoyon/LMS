@@ -20,3 +20,9 @@ class InvitationAdmin(admin.ModelAdmin):
     search_fields = ("organization__name", "invited_by__email", "email")
     list_filter = ("role", "status", "created_at")
     
+
+@admin.register(Contract)
+class ContractAdmin(admin.ModelAdmin):
+    list_display = ("id", "instructor", "course", "revenue_share", "expiry_date", "status", "created_at")
+    search_fields = ("organization__name", "instructor__email")
+    list_filter = ("status", "created_at")

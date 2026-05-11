@@ -264,13 +264,9 @@ LOGGING = {
 # Add any custom settings here
 
 
-
-
-
 STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-
 
 
 # Commission rates (multipliers)
@@ -279,14 +275,11 @@ PLATFORM_FEE_RATE = Decimal("0.10")
 
 
 
-
-
 # Max request size (total request body)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5368709120 # 50 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5368709120 
 
 # Max single file size
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5368709120  # 50 MB
-
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5368709120  
 FONTEND_ULR = os.getenv("FONTEND_ULR", "http://localhost:3001")
 FONTEND_SUCCESSFUL_URL = os.getenv("FONTEND_SUCCESSFUL_URL", "http://localhost:3000")
 

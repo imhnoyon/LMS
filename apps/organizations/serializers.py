@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from django.db import transaction
-from apps.courses.models import sessionRecordUploader
+from apps.courses.models import Course, sessionRecordUploader
 from apps.payments.models import Withdrawal
 from apps.users.models import User
-from apps.organizations.models import Membership, Organization, Invitation
+from apps.organizations.models import Contract, Membership, Organization, Invitation
+from django.utils import timezone
 from django.utils.timesince import timesince
 
 class OrganizationRegisterSerializer(serializers.ModelSerializer):
@@ -202,3 +203,117 @@ class OrganizationEarningsSerializer(serializers.Serializer):
     current_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
     withdrawals = WithdrawalSerializer(many=True, read_only=True)
     monthly_revenue_chart = RevenueChartSerializer2(many=True)
+    
+    
+    
+    
+class OrInstructorSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    user_name = serializers.CharField(source="user.name", read_only=True)
+    class Meta:
+        model = Membership
+        fields = ["id","user_name","organization_name","role","status","joined_at"]
+        read_only_fields = ["id","user_name","organization_name","joined_at"]
+        
+        
+        
+        
+        
+class OrCourseSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    class Meta:
+        model = Course
+        fields = ["id","title",'subtitle',"organization_name"]
+        read_only_fields = ["id","title",'subtitle',"organization_name"]
+        
+        
+class ContractSerializer(serializers.ModelSerializer):
+    instructor_name = serializers.CharField(source="instructor.user.name", read_only=True)
+    course_name = serializers.CharField(source="course.title", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    instructor_avatar = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Contract
+        fields = ["id", "organization_name", "instructor_name", "course_name", "revenue_share", "expiry_date", "status", "created_at", "instructor_avatar"]
+        read_only_fields = ["id", "organization_name", "instructor_name", "course_name", "status", "created_at"]
+
+    def get_membership_id(self, obj):
+        return obj.instructor.id if obj.instructor else None
+
+    def get_status(self, obj):
+        if obj.expiry_date and obj.expiry_date < timezone.now().date():
+            return Contract.Status.EXPIRED
+        return Contract.Status.ONGOING
+
+    def get_instructor_avatar(self, obj):
+        if obj.instructor and obj.instructor.user and getattr(obj.instructor.user, 'avatar', None):
+            request = self.context.get('request')
+            try:
+                return request.build_absolute_uri(obj.instructor.user.avatar.url) if request else obj.instructor.user.avatar.url
+            except Exception:
+                return obj.instructor.user.avatar.url
+        return None
+
+class ContractCreateSerializer(serializers.ModelSerializer):
+    instructor_id = serializers.IntegerField(write_only=True)
+    course_id = serializers.IntegerField(write_only=True)
+    revenue_share = serializers.FloatField(min_value=0, max_value=100)
+    
+
+    class Meta:
+        model = Contract
+        fields = ["instructor_id", "course_id", "expiry_date", "revenue_share"]
+
+    def validate(self, attrs):
+        organization = self.context.get("organization")
+        if not organization:
+            raise serializers.ValidationError({"organization": "Organization context is required."})
+
+        instructor_id = attrs.get("instructor_id")
+        course_id = attrs.get("course_id")
+        revenue_share = attrs.get("revenue_share")
+
+        # Validate revenue share
+        if not (0 <= revenue_share <= 100):
+            raise serializers.ValidationError({"revenue_share": "Revenue share must be between 0 and 100 (0-100%)."})
+
+        # Validate instructor membership exists in this organization
+        instructor_membership = Membership.objects.select_related("user").filter(
+            id=instructor_id,
+            organization=organization,
+            role=Membership.Role.INSTRUCTOR,
+            status=Membership.Status.ACTIVE,
+        ).first()
+        if not instructor_membership:
+            raise serializers.ValidationError(
+                {"instructor_id": "No active instructor found in this organization with this ID."}
+            )
+
+        # Validate course exists in this organization
+        course = Course.objects.filter(
+            id=course_id,
+            organization=organization,
+        ).first()
+        if not course:
+            raise serializers.ValidationError(
+                {"course_id": "No course found in this organization with this ID."}
+            )
+
+        attrs["instructor_membership"] = instructor_membership
+        attrs["course"] = course
+        attrs["organization"] = organization
+        return attrs
+
+    def create(self, validated_data):
+        instructor_membership = validated_data.pop("instructor_membership")
+        course = validated_data.pop("course")
+        organization = validated_data.pop("organization")
+
+        return Contract.objects.create(
+            organization=organization,
+            instructor=instructor_membership,
+            course=course,
+            **validated_data,
+        )

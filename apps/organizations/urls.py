@@ -25,12 +25,21 @@ urlpatterns = [
     # Organization Earnings Dashboard
     path("organization-deshboard/", OrganizationDashboardView.as_view(), name="organization-earnings"),
     path("organization-earnings/dashboard/",OrganizationEarningsDashboardView.as_view(),name="organization-earnings-dashboard"),
+    path("organization-instructors-contracts/",OrInstructorListAPIView.as_view(),name="organization-instructors"),
+    path("my-organization-courses/",MyOrganizationCourseListAPIView.as_view(),name="my-organization-courses"),
+    path("contracts-instructors/",ContractListCreateAPIView.as_view(),name="contracts"),
+    path("contracts-instructors/<int:contract_id>/",ContractListCreateAPIView.as_view(),name="contract-update"),
+    path("organization-contracts-details/<int:contract_id>/", ContractDetailAPIView.as_view(), name="organization-contracts-detail"),
     
+    path("members-analytics/",OrganizationMemberAnalyticsView.as_view(),name="members-analytics"),
     
     path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
-     
     path("organization/earnings/", OrganizationEarningsView.as_view(), name="organization-earnings"),
-    
     path("membership/toggle/<int:pk>/", ToggleMembershipStatusAPIView.as_view(), name="toggle-membership-status"),
+    
+    
+    
+    
+
 ]

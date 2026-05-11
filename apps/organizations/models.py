@@ -2,6 +2,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth import get_user_model
 from apps.courses.models import Course
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.db.models import Q
 from datetime import timedelta
 from django.db import models
@@ -145,7 +146,7 @@ class Contract(models.Model):
     organization  = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="contracts")
     instructor = models.ForeignKey(Membership, on_delete=models.CASCADE, related_name="contracts")
     course = models.ForeignKey(Course, on_delete=models.CASCADE,related_name="contracts")
-    revenue_share = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+    revenue_share = models.FloatField(validators=[MinValueValidator(0), MaxValueValidator(100)])
     expiry_date = models.DateField()
     status      = models.CharField(max_length=20, choices=Status.choices, default=Status.ONGOING)
     created_at  = models.DateTimeField(auto_now_add=True)
@@ -164,8 +165,13 @@ class Contract(models.Model):
         )
 
     def save(self, *args, **kwargs):
-        if self.expiry_date < timezone.now().date():
+        if isinstance(self.expiry_date, str):
+            self.expiry_date = parse_date(self.expiry_date)
+
+        if self.expiry_date and self.expiry_date < timezone.now().date():
             self.status = self.Status.EXPIRED
+        else:
+            self.status = self.Status.ONGOING
         super().save(*args, **kwargs)
 
 
@@ -207,3 +213,11 @@ class Invitation(models.Model):
 
     def __str__(self):
         return f"Invite → {self.email} @ {self.organization.name}"
+
+
+
+
+
+
+
+        

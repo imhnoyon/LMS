@@ -9,7 +9,7 @@ from apps.enrollments.models import Enrollment
 from apps.payments.models import Commission, Payment, Withdrawal
 from utils.permissions import IsInstructor, IsOrganization
 from .models import Organization, Membership, Invitation
-from .serializers import LiveSessionUploaderSerializer, OrganizationAdminSerializer, OrganizationEarningsSerializer, OrganizationMembershipSerializer, UnverifiedOrganizationListSerializer, InvitationSerializer
+from .serializers import *
 from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from rest_framework import status
@@ -21,6 +21,7 @@ from utils.emails import send_invitation_email
 from decimal import Decimal
 from django.db.models.functions import TruncDate, TruncMonth
 from datetime import date, timedelta
+from django.utils.dateparse import parse_date
 
 
 # View to list unverified organizations for admin review
@@ -206,7 +207,7 @@ class RespondInvitationView(APIView):
                     request.user.role = 'instructor'
                     request.user.save(update_fields=['role'])
                 
-                # ✅ Update Instructor model flag
+                #  Update Instructor model flag
                 from apps.instructors.models import Instructor
                 instructor, _ = Instructor.objects.get_or_create(user=request.user)
                 instructor.is_organization_instructor = True
@@ -918,4 +919,287 @@ class ToggleMembershipStatusAPIView(APIView):
                 }
             },
             status=status.HTTP_200_OK
+        )
+        
+        
+class OrInstructorListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+    pagination_class = CustomPagination
+
+    def get_user_organization(self, user):
+        return Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).select_related("organization").first()
+
+    def get(self, request):
+        org_membership = self.get_user_organization(request.user)
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to access this organization's instructors.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        organization = org_membership.organization
+        search = request.query_params.get("search", "")
+        status_param = request.query_params.get("status", "")
+
+        # Filter memberships for instructors in this organization
+        memberships = Membership.objects.filter(
+            organization=organization,
+            role=Membership.Role.INSTRUCTOR
+        ).select_related("user", "organization").order_by("-joined_at")
+
+        if search:
+            memberships = memberships.filter(
+                Q(user__name__icontains=search) |
+                Q(user__email__icontains=search)
+            )
+
+        if status_param:
+            memberships = memberships.filter(status=status_param)
+
+        paginator = self.pagination_class()
+        paginated_memberships = paginator.paginate_queryset(memberships, request, view=self)
+        serializer = OrInstructorSerializer(paginated_memberships, many=True)
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Organization instructors retrieved successfully."
+        )
+        
+        
+        
+class MyOrganizationCourseListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        # Get user's organization membership
+        membership = Membership.objects.filter(
+            user=request.user,
+            status=Membership.Status.ACTIVE
+        ).select_related("organization").first()
+
+        if not membership:
+            return APIResponse.error(
+                message="You do not have an active organization membership.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        organization = membership.organization
+        search = request.query_params.get("search", "")
+        status_param = request.query_params.get("status", "")
+
+        # Filter courses by the user's organization
+        courses = Course.objects.filter(
+            organization=organization
+        ).select_related("organization").order_by("-id")
+
+        if search:
+            courses = courses.filter(
+                Q(title__icontains=search) |
+                Q(subtitle__icontains=search) |
+                Q(topic__icontains=search)
+            )
+
+        if status_param:
+            courses = courses.filter(status__iexact=status_param)
+
+        paginator = self.pagination_class()
+        paginated_courses = paginator.paginate_queryset(courses, request, view=self)
+        serializer = OrCourseSerializer(paginated_courses, many=True)
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Organization courses retrieved successfully."
+        )
+        
+        
+class OrganizationMemberAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def get_user_organization(self, user):
+        return Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).select_related("organization").first()
+
+    def get(self, request):
+        org_membership = self.get_user_organization(request.user)
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to access this organization's member analytics.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        organization = org_membership.organization
+
+        # Get all members
+        all_members = Membership.objects.filter(organization=organization,).exclude(role=Membership.Role.ADMIN).select_related("user")
+
+        # Count by status
+        total_members = all_members.count()
+        active_members = all_members.filter(status=Membership.Status.ACTIVE).count()
+        suspended_members = all_members.filter(status=Membership.Status.SUSPENDED).count()
+        # Active members by role
+        return APIResponse.success(
+            message="Organization member analytics retrieved successfully.",
+            data={
+                "summary": {
+                    "total_members": total_members,
+                    "active_members": active_members,
+                    "suspended_members": suspended_members,
+                },
+            },
+            status_code=status.HTTP_200_OK
+        )
+        
+        
+class ContractListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+    pagination_class = CustomPagination
+
+    def get_user_organization(self, user):
+        return Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).select_related("organization").first()
+
+    def get(self, request):
+        org_membership = self.get_user_organization(request.user)
+        search = request.query_params.get("search", "")
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to access contracts for this organization.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        contracts = Contract.objects.filter(
+            organization=org_membership.organization
+        ).select_related("organization", "instructor__user", "course").order_by("-created_at")
+
+        if search:
+            contracts = contracts.filter(
+                Q(instructor__user__name__icontains=search) |
+                Q(course__title__icontains=search)
+            )
+
+        paginator = self.pagination_class()
+        paginated_contracts = paginator.paginate_queryset(contracts, request, view=self)
+        serializer = ContractSerializer(paginated_contracts, many=True, context={"request": request})
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Contracts retrieved successfully."
+        )
+
+
+    def post(self, request):
+        org_membership = self.get_user_organization(request.user)
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to create contracts for this organization.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = ContractCreateSerializer(
+            data=request.data,
+            context={"organization": org_membership.organization}
+        )
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Invalid contract data.",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        contract = serializer.save()
+        response_serializer = ContractSerializer(contract)
+
+        return APIResponse.success(
+            message="Contract created successfully.",
+            data=response_serializer.data,
+            status_code=status.HTTP_201_CREATED
+        )
+        
+        
+    def patch(self, request, contract_id):
+        org_membership = self.get_user_organization(request.user)
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to update contracts for this organization.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            contract = Contract.objects.select_related("organization").get(id=contract_id, organization=org_membership.organization)
+        except Contract.DoesNotExist:
+            return APIResponse.error(
+                message="Contract not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        # Only allow updating revenue_share and expiry_date for now
+        revenue_share = request.data.get("revenue_share")
+        expiry_date = request.data.get("expiry_date")
+
+        if revenue_share is not None:
+            if not (0 <= float(revenue_share) <= 100):
+                return APIResponse.error(
+                    message="Revenue share must be between 0 and 100 (0-100%).",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            contract.revenue_share = revenue_share
+
+        if expiry_date is not None:
+            contract.expiry_date = parse_date(expiry_date) if isinstance(expiry_date, str) else expiry_date
+
+        contract.save()
+        response_serializer = ContractSerializer(contract)
+
+        return APIResponse.success(
+            message="Contract updated successfully.",
+            data=response_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        
+ 
+ 
+class ContractDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    def get_user_organization(self, user):
+        return Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER]
+        ).select_related("organization").first()
+
+    def get(self, request, contract_id):
+        org_membership = self.get_user_organization(request.user)
+        if not org_membership:
+            return APIResponse.error(
+                message="You do not have permission to access this contract.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            contract = Contract.objects.select_related("organization", "instructor__user", "course").get(id=contract_id, organization=org_membership.organization)
+        except Contract.DoesNotExist:
+            return APIResponse.error(
+                message="Contract not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ContractSerializer(contract,context={"request": request})
+
+        return APIResponse.success(
+            message="Contract details retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
         )
