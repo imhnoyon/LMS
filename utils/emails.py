@@ -73,15 +73,50 @@ def send_reset_password_email(email, code):
     message.send()
 
 
+# def send_invitation_email(email, organization_name, invitation_token, is_registered):
+#     subject = f"Learn Hub | Invitation from {organization_name}"
+    
+#     frontend_url = getattr(settings, "FRONTEND_URL", "https://lms-web-teal.vercel.app/en/")
+    
+#     if is_registered:
+#         link = f"{frontend_url}/organization-invitation/respond?token={invitation_token}"
+#     else:
+#         link = f"{frontend_url}/auth/trainer-sign-up?invite_token={invitation_token}&email={email}"
+
+#     html_content = render_to_string(
+#         "emails/organization_invitation.html",
+#         {
+#             "organization_name": organization_name,
+#             "invitation_link": link,
+#             "is_registered": is_registered,
+#             "email": email
+#         }
+#     )
+
+#     message = EmailMessage(
+#         subject,
+#         html_content,
+#         settings.DEFAULT_FROM_EMAIL,
+#         [email],
+#     )
+#     message.content_subtype = "html"
+#     message.send()
+
+
+
 def send_invitation_email(email, organization_name, invitation_token, is_registered):
     subject = f"Learn Hub | Invitation from {organization_name}"
-    
-    frontend_url = getattr(settings, "FRONTEND_URL", "https://rs0hfx59-8002.asse.devtunnels.ms/")
-    
+
     if is_registered:
-        link = f"{frontend_url}/invitations/respond?token={invitation_token}"
+        link = (
+            f"https://lms-web-teal.vercel.app/en/organization-invitation"
+            f"?token={invitation_token}"
+        )
     else:
-        link = f"{frontend_url}/register?invite_token={invitation_token}&email={email}"
+        link = (
+            f"https://lms-web-teal.vercel.app/en/auth/trainer-sign-up"
+            f"?token={invitation_token}&email={email}"
+        )
 
     html_content = render_to_string(
         "emails/organization_invitation.html",
@@ -89,8 +124,8 @@ def send_invitation_email(email, organization_name, invitation_token, is_registe
             "organization_name": organization_name,
             "invitation_link": link,
             "is_registered": is_registered,
-            "email": email
-        }
+            "email": email,
+        },
     )
 
     message = EmailMessage(
@@ -99,5 +134,6 @@ def send_invitation_email(email, organization_name, invitation_token, is_registe
         settings.DEFAULT_FROM_EMAIL,
         [email],
     )
+
     message.content_subtype = "html"
     message.send()
