@@ -1,16 +1,6 @@
 from django.urls import path
 from .views import *
-from .analytics_views import (
-    DashboardStatisticsView,
-    RevenueTrendsView,
-    DailyRevenueChartView,
-    CourseAnalyticsView,
-    TopCoursesView,
-    RecentActivityView,
-    InstructorAnalyticsView,
-    RatingsBreakdownView,
-    ComprehensiveReportView,
-)
+from .analytics_views import *
     
 
 urlpatterns = [
@@ -51,7 +41,6 @@ urlpatterns = [
     path("course-analytics/", CourseAnalyticsView.as_view(), name="course-analytics"),
     path("top-courses/", TopCoursesView.as_view(), name="top-courses"),
     path("recent-activity/", RecentActivityView.as_view(), name="recent-activity"),
-    path("instructor-analytics/", InstructorAnalyticsView.as_view(), name="instructor-analytics"),
     path("ratings-breakdown/", RatingsBreakdownView.as_view(), name="ratings-breakdown"),
     path("comprehensive-report/", ComprehensiveReportView.as_view(), name="comprehensive-report"),
     
@@ -60,6 +49,7 @@ urlpatterns = [
     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
     path("organization/earnings/", OrganizationEarningsView.as_view(), name="organization-earnings"),
     path("membership/toggle/<int:pk>/", ToggleMembershipStatusAPIView.as_view(), name="toggle-membership-status"),
+    path("organization/profile/",OrganizationProfileAPIView.as_view(),name="organization-profile"),
     
     
     

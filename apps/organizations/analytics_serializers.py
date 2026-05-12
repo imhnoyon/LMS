@@ -9,6 +9,8 @@ from apps.courses.models import Course
 from apps.enrollments.models import Enrollment
 from apps.users.models import User
 from django.utils.timesince import timesince
+from django.conf import settings
+from decimal import Decimal
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -93,10 +95,32 @@ class CommissionSerializer(serializers.ModelSerializer):
     """Commission transaction details"""
     user_name = serializers.CharField(source='user.name', read_only=True)
     course_title = serializers.CharField(source='course.title', read_only=True)
+    organization_received = serializers.DecimalField(max_digits=10, decimal_places=2, source='commission_amount', read_only=True)
+    platform_fee = serializers.SerializerMethodField()
+    affiliate_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Commission
-        fields = ['id', 'user_name', 'course_title', 'order_amount', 'commission_amount', 'created_at']
+        fields = ['id', 'user_name', 'course_title', 'order_amount', 'commission_amount', 'organization_received', 'platform_fee', 'affiliate_amount', 'created_at']
+
+    def get_platform_fee(self, obj):
+        try:
+            rate = getattr(settings, 'PLATFORM_FEE_RATE', Decimal('0.10'))
+            fee = (obj.order_amount * rate).quantize(Decimal('0.01'))
+            return fee
+        except Exception:
+            return Decimal('0.00')
+
+    def get_affiliate_amount(self, obj):
+        try:
+            platform_fee = self.get_platform_fee(obj)
+            affiliate = (obj.order_amount - platform_fee - (obj.commission_amount or Decimal('0.00')))
+            # Ensure non-negative and quantized
+            if affiliate < 0:
+                affiliate = Decimal('0.00')
+            return affiliate.quantize(Decimal('0.01'))
+        except Exception:
+            return Decimal('0.00')
 
 
 class RecentTransactionSerializer(serializers.Serializer):

@@ -317,3 +317,57 @@ class ContractCreateSerializer(serializers.ModelSerializer):
             course=course,
             **validated_data,
         )
+        
+        
+class OrganizationProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=False)
+    email = serializers.EmailField(required=False)
+
+    class Meta:
+        model = Organization
+        fields = ["id", "username", "name", "bio", "photo", "banner", "phone", "email"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and getattr(request.user, "is_authenticated", False):
+            data["username"] = request.user.name
+        else:
+            data["username"] = instance.name
+        return data
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        # Update the authenticated user's name
+        username = validated_data.pop("username", None)
+        if username and user:
+            user.name = username
+            user.save(update_fields=["name"])
+            instance.name = username
+
+        # Optional user email update if provided
+        email = validated_data.pop("email", None)
+        if email and user:
+            user.email = email
+            user.save(update_fields=["email"])
+
+        # Update organization fields
+        instance.name = validated_data.get("name", instance.name)
+        instance.bio = validated_data.get("bio", instance.bio)
+        instance.phone = validated_data.get("phone", instance.phone)
+
+        # Update photo
+        request = self.context.get("request")
+
+        if request and request.FILES.get("photo"):
+            instance.photo = request.FILES.get("photo")
+
+        # Update banner
+        if request and request.FILES.get("banner"):
+            instance.banner = request.FILES.get("banner")
+
+        instance.save()
+        return instance
+    

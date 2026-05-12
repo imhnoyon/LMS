@@ -1203,3 +1203,83 @@ class ContractDetailAPIView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        
+        
+class OrganizationProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsOrganization]
+
+    # Get Organization Profile
+    def get(self, request):
+        try:
+            # Get user's organization via Membership (admin/manager role)
+            membership = Membership.objects.filter(
+                user=request.user,
+                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                status=Membership.Status.ACTIVE
+            ).select_related('organization').first()
+            
+            if not membership:
+                return APIResponse.error(
+                    message="Organization not found or you don't have admin access.",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            organization = membership.organization
+        except Organization.DoesNotExist:
+            return APIResponse.error(
+                message="Organization not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = OrganizationProfileSerializer(organization, context={"request": request})
+
+        return APIResponse.success(
+            message="Organization profile retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+    # Update Organization Profile
+    def patch(self, request):
+        try:
+            # Get user's organization via Membership (admin/manager role)
+            membership = Membership.objects.filter(
+                user=request.user,
+                role__in=[Membership.Role.ADMIN],
+                status=Membership.Status.ACTIVE
+            ).select_related('organization').first()
+            
+            if not membership:
+                return APIResponse.error(
+                    message="Organization not found or you don't have admin access.",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            organization = membership.organization
+        except Organization.DoesNotExist:
+            return APIResponse.error(
+                message="Organization not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = OrganizationProfileSerializer(
+            organization,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return APIResponse.success(
+                message="Organization profile updated successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        return APIResponse.error(
+            message="Validation failed.",
+            data=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )

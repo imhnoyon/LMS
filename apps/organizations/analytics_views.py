@@ -348,40 +348,14 @@ class RecentActivityView(OrganizationAnalyticsMixin, APIView):
                 'order_id': order.order_id,
                 'user_name': order.user.name,
                 'user_email': order.user.email,
-                'total_amount': float(order.total_amount),
+                'total_amount': order.total_amount,
+                'courses_count': order.items.count(),
                 'status': order.status,
                 'created_at': order.created_at
             })
         return result
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# INSTRUCTOR ANALYTICS VIEW
-# ═══════════════════════════════════════════════════════════════════════════
-
-class InstructorAnalyticsView(OrganizationAnalyticsMixin, APIView):
-    """
-    Instructor performance and earnings analytics
-    GET /api/v1/organizations/instructor-analytics/
-    Query params: limit (optional)
-    """
-    pagination_class = CustomPagination
-
-    def get(self, request):
-        analytics, error = self.get_analytics_or_error(request)
-        if error:
-            return error
-
-        instructor_data = analytics.get_instructor_earnings()
-        
-        paginator = self.pagination_class()
-        paginated_data = paginator.paginate_queryset(instructor_data, request, view=self)
-        serializer = InstructorAnalyticsSerializer(paginated_data, many=True)
-
-        return paginator.get_paginated_response(
-            serializer.data,
-            message="Instructor analytics retrieved successfully."
-        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -488,7 +462,8 @@ class ComprehensiveReportView(OrganizationAnalyticsMixin, APIView):
                 'order_id': order.order_id,
                 'user_name': order.user.name,
                 'user_email': order.user.email,
-                'total_amount': float(order.total_amount),
+                'total_amount': order.total_amount,
+                'courses_count': order.items.count(),
                 'status': order.status,
                 'created_at': order.created_at
             })

@@ -2,16 +2,17 @@
 Organization Analytics & Reporting Module
 Handles all analytics calculations, aggregations, and data for organization dashboards
 """
-from django.db.models import Sum, Count, Avg, Q, F, DecimalField, FloatField
+from django.db.models import Sum, Count, Avg, Q, F, DecimalField, FloatField, Case, When, Value, Subquery, OuterRef
 from django.db.models.functions import TruncDate, TruncMonth, Coalesce
 from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta, date
 from apps.payments.models import Commission
-from apps.orders.models import Order
+from apps.orders.models import Order, OrderItem
 from apps.enrollments.models import Enrollment
 from apps.courses.models import Course
 from apps.courses.models import Review
+from django.db.models import Case, When, Value
 
 
 class OrganizationAnalytics:
@@ -30,13 +31,24 @@ class OrganizationAnalytics:
     # ═══════════════════════════════════════════════════════════════════════
 
     def get_total_revenue(self, start_date=None, end_date=None):
-        """Calculate total revenue with optional date filtering"""
-        query = Commission.objects.filter(course__organization=self.organization)
+        """Calculate total revenue based on course discount_price
+        Uses OrderItem with course.discount_price (or course.price if no discount)
+        """
+        query = OrderItem.objects.filter(
+            course__organization=self.organization,
+            order__status='paid'
+        ).annotate(
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
+        )
         
         if start_date and end_date:
-            query = query.filter(created_at__date__range=[start_date, end_date])
+            query = query.filter(order__created_at__date__range=[start_date, end_date])
         
-        result = query.aggregate(total=Coalesce(Sum('commission_amount', output_field=DecimalField()), Decimal('0.00')))
+        result = query.aggregate(total=Coalesce(Sum('revenue', output_field=DecimalField()), Decimal('0.00')))
         return result['total']
 
     def get_today_revenue(self):
@@ -44,30 +56,45 @@ class OrganizationAnalytics:
         return self.get_total_revenue(self.today, self.today)
 
     def get_monthly_revenue(self, year=None, month=None):
-        """Get monthly revenue for a specific month"""
+        """Get monthly revenue for a specific month based on discount_price"""
         if not year:
             year = self.today.year
         if not month:
             month = self.today.month
 
-        return Commission.objects.filter(
+        result = OrderItem.objects.filter(
             course__organization=self.organization,
-            created_at__year=year,
-            created_at__month=month
-        ).aggregate(total=Coalesce(Sum('commission_amount', output_field=DecimalField()), Decimal('0.00')))['total']
+            order__status='paid',
+            order__created_at__year=year,
+            order__created_at__month=month
+        ).annotate(
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
+        ).aggregate(total=Coalesce(Sum('revenue', output_field=DecimalField()), Decimal('0.00')))
+        
+        return result['total']
 
     def get_revenue_by_month(self, year=None, months_count=12):
-        """Get revenue breakdown by month"""
+        """Get revenue breakdown by month based on discount_price"""
         if not year:
             year = self.today.year
 
-        revenue_data = Commission.objects.filter(
+        revenue_data = OrderItem.objects.filter(
             course__organization=self.organization,
-            created_at__year=year
+            order__status='paid',
+            order__created_at__year=year
         ).annotate(
-            month=TruncMonth('created_at')
+            month=TruncMonth('order__created_at'),
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
         ).values('month').annotate(
-            total=Coalesce(Sum('commission_amount', output_field=DecimalField()), Decimal('0.00'))
+            total=Coalesce(Sum('revenue', output_field=DecimalField()), Decimal('0.00'))
         ).order_by('month')
 
         revenue_map = {item['month'].month: item['total'] for item in revenue_data}
@@ -84,7 +111,7 @@ class OrganizationAnalytics:
         return result
 
     def get_revenue_by_specific_months(self, year=None, months=None):
-        """Get revenue breakdown for specific months
+        """Get revenue breakdown for specific months based on discount_price
         Args:
             year: Year to filter by (default: current year)
             months: List of month numbers (1-12) to include
@@ -94,14 +121,20 @@ class OrganizationAnalytics:
         if not months:
             months = list(range(1, 13))
 
-        revenue_data = Commission.objects.filter(
+        revenue_data = OrderItem.objects.filter(
             course__organization=self.organization,
-            created_at__year=year,
-            created_at__month__in=months
+            order__status='paid',
+            order__created_at__year=year,
+            order__created_at__month__in=months
         ).annotate(
-            month=TruncMonth('created_at')
+            month=TruncMonth('order__created_at'),
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
         ).values('month').annotate(
-            total=Coalesce(Sum('commission_amount', output_field=DecimalField()), Decimal('0.00'))
+            total=Coalesce(Sum('revenue', output_field=DecimalField()), Decimal('0.00'))
         ).order_by('month')
 
         revenue_map = {item['month'].month: item['total'] for item in revenue_data}
@@ -119,14 +152,20 @@ class OrganizationAnalytics:
         return result
 
     def get_revenue_by_date_range(self, start_date, end_date):
-        """Get daily revenue breakdown for date range"""
-        data = Commission.objects.filter(
+        """Get daily revenue breakdown for date range based on discount_price"""
+        data = OrderItem.objects.filter(
             course__organization=self.organization,
-            created_at__date__range=[start_date, end_date]
+            order__status='paid',
+            order__created_at__date__range=[start_date, end_date]
         ).annotate(
-            day=TruncDate('created_at')
+            day=TruncDate('order__created_at'),
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
         ).values('day').annotate(
-            total=Coalesce(Sum('commission_amount', output_field=DecimalField()), Decimal('0.00'))
+            total=Coalesce(Sum('revenue', output_field=DecimalField()), Decimal('0.00'))
         ).order_by('day')
 
         return [
@@ -163,30 +202,58 @@ class OrganizationAnalytics:
         ).count()
 
     def get_course_sales(self, start_date=None, end_date=None):
-        """Get total course sales count with optional date filtering"""
-        query = Commission.objects.filter(course__organization=self.organization)
+        """Get total course sales count based on OrderItem (paid orders only)"""
+        query = OrderItem.objects.filter(
+            course__organization=self.organization,
+            order__status='paid'
+        )
         
         if start_date and end_date:
-            query = query.filter(created_at__date__range=[start_date, end_date])
+            query = query.filter(order__created_at__date__range=[start_date, end_date])
         
         return query.count()
 
     def get_average_course_price(self):
-        """Calculate average course price"""
+        """Calculate average course price using discount_price"""
         result = Course.objects.filter(
             organization=self.organization
-        ).aggregate(avg_price=Coalesce(Avg('price', output_field=DecimalField()), Decimal('0.00')))
+        ).annotate(
+            effective_price=Case(
+                When(discount_price__isnull=False, then=F('discount_price')),
+                default=F('price'),
+                output_field=DecimalField()
+            )
+        ).aggregate(avg_price=Coalesce(Avg('effective_price', output_field=DecimalField()), Decimal('0.00')))
         return result['avg_price']
 
     def get_course_enrollment_stats(self):
-        """Get enrollment statistics per course"""
+        """Get enrollment statistics per course using discount_price for revenue"""
+        from django.db.models import Subquery, OuterRef
+        
+        # Subquery to calculate revenue per course using discount_price
+        revenue_subquery = OrderItem.objects.filter(
+            course=OuterRef('id'),
+            order__status='paid'
+        ).annotate(
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
+        ).values('course').annotate(
+            total=Sum('revenue', output_field=DecimalField())
+        ).values('total')
+        
         courses = Course.objects.filter(
             organization=self.organization
         ).annotate(
             total_enrollments=Count('enrollments', filter=Q(enrollments__is_active=True)),
-            total_revenue=Coalesce(Sum('commissions__commission_amount', output_field=DecimalField()), Decimal('0.00'))
+            total_revenue=Coalesce(
+                Subquery(revenue_subquery),
+                Decimal('0.00')
+            )
         ).values(
-            'id', 'title', 'price', 'status', 'total_enrollments', 'total_revenue'
+            'id', 'title', 'price', 'discount_price', 'status', 'total_enrollments', 'total_revenue'
         ).order_by('-total_enrollments')
         
         return list(courses)
@@ -239,9 +306,9 @@ class OrganizationAnalytics:
     def get_recent_orders(self, limit=10, start_date=None, end_date=None):
         """Get recent paid orders"""
         query = Order.objects.filter(
-            orderitems__course__organization=self.organization,
+            items__course__organization=self.organization,
             status='paid'
-        ).distinct().select_related('user').prefetch_related('orderitems__course')
+        ).distinct().select_related('user').prefetch_related('items__course')
 
         if start_date and end_date:
             query = query.filter(created_at__date__range=[start_date, end_date])
@@ -272,14 +339,31 @@ class OrganizationAnalytics:
     # ═══════════════════════════════════════════════════════════════════════
 
     def get_instructor_earnings(self):
-        """Get earnings per instructor"""
+        """Get earnings per instructor based on discount_price"""
         from apps.organizations.models import Membership
+        
+        # Subquery to calculate total earnings per instructor using discount_price
+        earnings_subquery = OrderItem.objects.filter(
+            course__instructor__user_id=OuterRef('user__id'),
+            order__status='paid'
+        ).annotate(
+            revenue=Case(
+                When(course__discount_price__isnull=False, then=F('course__discount_price')),
+                default=F('course__price'),
+                output_field=DecimalField()
+            )
+        ).values('course__instructor__user_id').annotate(
+            total=Sum('revenue', output_field=DecimalField())
+        ).values('total')
         
         instructors = Membership.objects.filter(
             organization=self.organization,
             role=Membership.Role.INSTRUCTOR
         ).select_related('user').annotate(
-            total_earnings=Coalesce(Sum('user__commissions__commission_amount', output_field=DecimalField()), Decimal('0.00')),
+            total_earnings=Coalesce(
+                Subquery(earnings_subquery),
+                Decimal('0.00')
+            ),
             courses_count=Count('user__courses', filter=Q(user__courses__organization=self.organization)),
             enrollments_count=Count(
                 'user__courses__enrollments',
