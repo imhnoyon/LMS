@@ -1,5 +1,16 @@
 from django.urls import path
 from .views import *
+from .analytics_views import (
+    DashboardStatisticsView,
+    RevenueTrendsView,
+    DailyRevenueChartView,
+    CourseAnalyticsView,
+    TopCoursesView,
+    RecentActivityView,
+    InstructorAnalyticsView,
+    RatingsBreakdownView,
+    ComprehensiveReportView,
+)
     
 
 urlpatterns = [
@@ -32,6 +43,18 @@ urlpatterns = [
     path("organization-contracts-details/<int:contract_id>/", ContractDetailAPIView.as_view(), name="organization-contracts-detail"),
     
     path("members-analytics/",OrganizationMemberAnalyticsView.as_view(),name="members-analytics"),
+    
+    # Organization Analytics & Reporting APIs
+    path("dashboard-statistics/", DashboardStatisticsView.as_view(), name="dashboard-statistics"),
+    path("revenue-trends/", RevenueTrendsView.as_view(), name="revenue-trends"),
+    path("daily-revenue/", DailyRevenueChartView.as_view(), name="daily-revenue"),
+    path("course-analytics/", CourseAnalyticsView.as_view(), name="course-analytics"),
+    path("top-courses/", TopCoursesView.as_view(), name="top-courses"),
+    path("recent-activity/", RecentActivityView.as_view(), name="recent-activity"),
+    path("instructor-analytics/", InstructorAnalyticsView.as_view(), name="instructor-analytics"),
+    path("ratings-breakdown/", RatingsBreakdownView.as_view(), name="ratings-breakdown"),
+    path("comprehensive-report/", ComprehensiveReportView.as_view(), name="comprehensive-report"),
+    
     
     path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
