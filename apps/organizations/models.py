@@ -24,6 +24,7 @@ class Organization(models.Model):
     banner = models.ImageField(upload_to="org/banners/", blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
     # email = models.EmailField(blank=True, help_text="Public contact email")
+    
 
     rating = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])
     total_reviews = models.PositiveIntegerField(default=0)

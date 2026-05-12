@@ -13,7 +13,7 @@ from apps.payments.models import Commission, Withdrawal
 from utils.api_response import APIResponse
 from utils.paginations import CustomPagination
 from apps.courses.models import Course, LiveClass, Review
-from utils.permissions import IsInstructor, IsStudent
+from utils.permissions import IsInstructor, IsOrganization, IsStudent
 from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
@@ -539,88 +539,6 @@ class InstructorLiveSessionUploadView(APIView):
         
         
 
-from django.core.files.base import ContentFile
-import uuid     
-class SignatureUploadAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        data = request.data.get("signature")
-
-        if not data:
-            return Response({"error": "No signature provided"}, status=400)
-
-        signature_file = None
-
-        # Handle both base64 string and file upload
-        if isinstance(data, str):
-            # base64 encoded string
-            try:
-                format, imgstr = data.split(";base64,")
-                ext = format.split("/")[-1]
-                file_name = f"{uuid.uuid4()}.{ext}"
-                signature_file = ContentFile(
-                    base64.b64decode(imgstr),
-                    name=file_name
-                )
-            except (ValueError, IndexError):
-                return Response({"error": "Invalid base64 format"}, status=400)
-        else:
-            # Direct file upload (InMemoryUploadedFile or similar)
-            signature_file = data
-
-        if not signature_file:
-            return APIResponse.error({"error": "Failed to process signature"}, status_code=400)
-
-        obj, created = Instructor.objects.update_or_create(
-            user=request.user,
-            defaults={'signature': signature_file}
-        )
-
-        return APIResponse.success({
-            "message": "Signature saved successfully" if created else "Signature updated successfully",
-            "id": obj.id
-        })
-        
-    def patch(self, request):
-        data = request.data.get("signature")
-
-        if not data:
-            return Response({"error": "No signature provided"}, status=400)
-
-        signature_file = None
-
-        # Handle both base64 string and file upload
-        if isinstance(data, str):
-            # base64 encoded string
-            try:
-                format, imgstr = data.split(";base64,")
-                ext = format.split("/")[-1]
-                file_name = f"{uuid.uuid4()}.{ext}"
-                signature_file = ContentFile(
-                    base64.b64decode(imgstr),
-                    name=file_name
-                )
-            except (ValueError, IndexError):
-                return Response({"error": "Invalid base64 format"}, status=400)
-        else:
-            # Direct file upload (InMemoryUploadedFile or similar)
-            signature_file = data
-
-        if not signature_file:
-            return APIResponse.error({"error": "Failed to process signature"}, status_code=400)
-
-        obj, created = Instructor.objects.update_or_create(
-            user=request.user,
-            defaults={'signature': signature_file}
-        )
-
-        return APIResponse.success({
-            "message": "Signature saved successfully" if created else "Signature updated successfully",
-            "id": obj.id
-        })
-        
-        
 class MyInstructorSignatureAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -636,14 +554,30 @@ class MyInstructorSignatureAPIView(APIView):
 
 
 class InstructorCertificateListView(APIView):
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsAuthenticated, ]
     pagination_class = CustomPagination
 
     def get(self, request):
-        accepted_courses = Course.objects.filter(
-            instructor=request.user,
-            status="accepted"
-        ).order_by("-id")
+        user = request.user
+        
+        course_filters = Q(instructor=user, status="accepted")
+        
+        membership = Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+        ).select_related("organization").first()
+        
+        if membership:
+            course_filters |= Q(organization=membership.organization, status="accepted")
+        
+        accepted_courses = Course.objects.filter(course_filters).distinct().order_by("-id")
+        
+        if not membership and not Instructor.objects.filter(user=user).exists():
+            return APIResponse.error(
+                message="You don't have permission to view certificate list.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(accepted_courses, request)
@@ -824,4 +758,103 @@ class AdminInstructorListAPIView(APIView):
             serializer.data,
             message="Instructors retrieved successfully."
         )
+
+
+# Signature upload views
+class SignatureUploadAPIView(APIView):
+    """Upload signature for instructors or organization members"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        """Upload signature for authenticated user or organization member"""
+        serializer = SignatureUploadSerializer(data=request.FILES)
         
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Invalid signature file.",
+                data=serializer.errors,
+                status_code=400
+            )
+        
+        # Update user signature
+        signature_file = serializer.validated_data['signature']
+        request.user.signature = signature_file
+        request.user.save(update_fields=['signature', 'updated_at'])
+        
+        # If user is an instructor, also update instructor signature
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            instructor.signature = signature_file
+            instructor.save(update_fields=['signature', 'updated_at'])
+        except Instructor.DoesNotExist:
+            pass
+        
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature uploaded successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )
+
+
+class MyInstructorSignatureAPIView(APIView):
+    """Get/Update signature for instructor"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request):
+        """Get current user's signature"""
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature retrieved successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )
+
+    def patch(self, request):
+        """Upload/Update signature for current user"""
+        serializer = SignatureUploadSerializer(data=request.FILES)
+        
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Invalid signature file.",
+                data=serializer.errors,
+                status_code=400
+            )
+        
+        # Delete old signature file if exists
+        if request.user.signature:
+            try:
+                request.user.signature.delete()
+            except:
+                pass
+        
+        # Update user signature
+        signature_file = serializer.validated_data['signature']
+        request.user.signature = signature_file
+        request.user.save(update_fields=['signature', 'updated_at'])
+        
+        # If user is an instructor, also update instructor signature
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            # Delete old signature file from instructor if exists
+            if instructor.signature:
+                try:
+                    instructor.signature.delete()
+                except:
+                    pass
+            instructor.signature = signature_file
+            instructor.save(update_fields=['signature', 'updated_at'])
+        except Instructor.DoesNotExist:
+            pass
+        
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature uploaded successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )

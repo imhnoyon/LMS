@@ -224,19 +224,53 @@ class InstructorCertificateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Course
-        fields = ["id",'certificated_id', "title", "subtitle", "category", "topic", "language", "status", "created_at"]
+        fields = ["id",'certificated_id',  "title", "subtitle", "topic", "language", "status", "created_at"]
         
         
         
     def get_certificated_id(self, obj):
-        enrollment = obj.enrollments.filter(is_completed=True).first()
+        from apps.enrollments.models import Certificate
+        # Get first certificate issued for this course
+        certificate = Certificate.objects.filter(
+            enrollment__course=obj
+        ).order_by('-issue_date').first()
         
-        if enrollment and enrollment.certificate:
-            return enrollment.certificate.certificate_id
+        if certificate:
+            return certificate.certificate_id
         
         return None
     
+   
     
+class SignatureUploadSerializer(serializers.Serializer):
+    signature = serializers.ImageField(required=True)
+    
+    def validate_signature(self, value):
+        """Validate signature file size and type"""
+        max_size = 5 * 1024 * 1024  # 5MB
+        if value.size > max_size:
+            raise serializers.ValidationError("Signature file size must not exceed 5MB.")
+        
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+        if value.content_type not in allowed_types:
+            raise serializers.ValidationError("Only JPEG, PNG, and GIF images are allowed.")
+        
+        return value
+
+
+class UserSignatureSerializer(serializers.ModelSerializer):
+    signature_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'signature', 'signature_url']
+        read_only_fields = ['id', 'name', 'email']
+    
+    def get_signature_url(self, obj):
+        if obj.signature:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.signature.url) if request else obj.signature.url
+        return None
  
 class ReviewSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="user.name", read_only=True)

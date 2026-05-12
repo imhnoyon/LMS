@@ -67,7 +67,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
-    
+    signature = models.ImageField(upload_to="signatures/", blank=True, null=True)
 
     is_verified = models.BooleanField(default=False)
     accepted_terms = models.BooleanField(default=False)
@@ -96,6 +96,11 @@ class User(AbstractBaseUser, PermissionsMixin):
             return self.instructor.biography
         return None
     
+    def signature_url(self):
+        if self.signature:
+            return self.signature.url
+        return None
+
     def __str__(self):
         return f"{self.email} ({self.get_role_display()})"
 
