@@ -67,7 +67,7 @@ class UnverifiedOrganizationListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["id","name","bio","photo","banner","phone","email","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at",]
+        fields = ["id","name","bio","photo","banner","phone","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at",]
 
     def get_owner_name(self, obj):
         owner_membership = obj.owner
@@ -159,7 +159,7 @@ class OrganizationAdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["id","name","bio","photo","banner","phone","email","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at","avatar",]
+        fields = ["id","name","bio","photo","banner","phone","rating","total_reviews","total_students","total_courses","is_active","is_verified","owner_name","owner_email","created_at","updated_at","avatar",]
 
     def get_owner_name(self, obj):
         owner_membership = obj.owner
