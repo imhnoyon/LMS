@@ -279,9 +279,17 @@ class SectionDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'order', 'lectures', ]
         
 class InstructorDetailSerializer(serializers.ModelSerializer):
+    get_biography = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'name', 'email', 'phone', 'get_biography','avatar']
+
+    def get_get_biography(self, obj):
+        instructor = getattr(obj, "instructor", None)
+        if instructor and getattr(instructor, "biography", None):
+            return instructor.biography
+        return None
         
 class CourseDetailSerializer(serializers.ModelSerializer):
     advance_info = CourseAdvanceInfoDetailSerializer(read_only=True)
