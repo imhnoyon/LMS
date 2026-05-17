@@ -14,6 +14,7 @@ from utils.paginations import CustomPagination
 from utils.api_response import APIResponse
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 from django.utils import timezone
 from django.db.models import Q, Avg, Count, Sum
 from apps.users.models import User
@@ -310,6 +311,26 @@ class OrganizationInstructorDashboardView(APIView):
             status_code=200
         )
         
+
+class InstructorOrganizationListAPIView(APIView):
+    """Returns list of organizations where the logged-in user is an instructor (membership-based)."""
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def get(self, request):
+        # Fetch memberships where the user is an instructor
+        memberships = Membership.objects.filter(
+            user=request.user,
+            role=Membership.Role.INSTRUCTOR,
+            status=Membership.Status.ACTIVE
+        ).select_related("organization").order_by("-joined_at")
+
+        serializer = InstructorOrganizationSerializer(memberships, many=True, context={"request": request})
+
+        return APIResponse.success(
+            message="Instructor organizations retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+        )
         
 
 
@@ -1280,6 +1301,52 @@ class OrganizationProfileAPIView(APIView):
 
         return APIResponse.error(
             message="Validation failed.",
+            data=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+        
+        
+        
+
+class OrganizationProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        user = self.request.user
+        membership = Membership.objects.filter(
+            user=user,
+            role=Membership.Role.ADMIN,
+            status=Membership.Status.ACTIVE,
+        ).select_related("organization").first()
+
+        if not membership or not getattr(membership, 'organization', None):
+            raise Http404("Organization not found for this user.")
+
+        return membership.organization
+
+    # Retrieve Organization Information
+    def get(self, request):
+        organization = self.get_object()
+        serializer = OrganizationProfileSerializer(organization, context={"request": request})
+        return APIResponse.success(
+            message="Organization information retrieved successfully.",
+            data=serializer.data
+        )
+
+    # Update Organization Information
+    def patch(self, request):
+        organization = self.get_object()
+        serializer = OrganizationProfileSerializer(organization,data=request.data,partial=True,context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Organization information updated successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        return APIResponse.error(
+            message="Validation error.",
             data=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )

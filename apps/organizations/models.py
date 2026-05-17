@@ -84,7 +84,7 @@ class Membership(models.Model):
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
         MANAGER = "manager", "Manager"
-        INSTRUCTOR = "instructor", "Instructor"
+        INSTRUCTOR = "Or-instructor", "Or-Instructor"
         FINANCE = "finance", "Finance"
         REVIEWER = "reviewer", "Reviewer"
 

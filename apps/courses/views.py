@@ -711,6 +711,39 @@ class courseDetail(APIView):
         )
     
     
+
+class CourseBlockUnblockView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, pk):
+        course = get_object_or_404(Course, pk=pk)
+
+        # Toggle logic
+        if course.status == "published":
+            course.status = "accepted"
+            message = "Course Unblocked successfully."
+            status_value = "Unblocked"
+
+        elif course.status == "accepted":
+            course.status = "published"
+            message = "Course Blocked successfully."
+            status_value = "Blocked"
+
+        else:
+            return APIResponse.error(
+                message="Invalid course status.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        course.save()
+
+        return APIResponse.success(
+            message=message,
+            data={
+                "course_id": course.id,
+                "status": status_value
+            }
+        )
     
 
 # ── Live Class Management (Instructor) ───────────────────────────────────

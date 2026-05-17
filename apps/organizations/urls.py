@@ -15,6 +15,8 @@ urlpatterns = [
     path("invitation/<uuid:token>/", InvitationDetailView.as_view(), name="invitation-detail"),
     path("invitation/respond/<uuid:token>/", RespondInvitationView.as_view(), name="invitation-respond"),
     
+    
+    
     path("organization/instructors/dashboard/",OrganizationInstructorDashboardView.as_view(),name="organization-instructor-dashboard"),
     path("instructors/live-classes/",InstructorOrganizationLiveClassStatsView.as_view(),name="organization-instructor-list"),
     path("live-classes/<int:course_id>/",LiveClassOrganizationInstructorManageView.as_view(),name="organization-course-dashboard"),
@@ -31,8 +33,9 @@ urlpatterns = [
     path("contracts-instructors/",ContractListCreateAPIView.as_view(),name="contracts"),
     path("contracts-instructors/<int:contract_id>/",ContractListCreateAPIView.as_view(),name="contract-update"),
     path("organization-contracts-details/<int:contract_id>/", ContractDetailAPIView.as_view(), name="organization-contracts-detail"),
-    
     path("members-analytics/",OrganizationMemberAnalyticsView.as_view(),name="members-analytics"),
+    
+    path("organization-profile/",OrganizationProfileView.as_view(),name="organization-profile-update"),
     
     # Organization Analytics & Reporting APIs
     path("dashboard-statistics/", DashboardStatisticsView.as_view(), name="dashboard-statistics"),
@@ -45,12 +48,17 @@ urlpatterns = [
     path("comprehensive-report/", ComprehensiveReportView.as_view(), name="comprehensive-report"),
     
     
+    
     path("admin/organizations/", OrganizationAdminListAPIView.as_view(),name="admin-organization-list"),
     path("admin/organizations/<int:pk>/", OrganizationAdminDetailAPIView.as_view(),name="admin-organization-detail"),
     path("organization/earnings/", OrganizationEarningsView.as_view(), name="organization-earnings"),
     path("membership/toggle/<int:pk>/", ToggleMembershipStatusAPIView.as_view(), name="toggle-membership-status"),
     path("organization/profile/",OrganizationProfileAPIView.as_view(),name="organization-profile"),
     
+    
+    
+    # organization members instructor 
+    path("instructor/organizations/", InstructorOrganizationListAPIView.as_view(), name="instructor-organizations"),
     
     
     

@@ -370,4 +370,35 @@ class OrganizationProfileSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+class InstructorOrganizationSerializer(serializers.ModelSerializer):
+    organization_id = serializers.IntegerField(source="organization.id", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    organization_photo = serializers.ImageField(source="organization.photo", read_only=True)
+    banner = serializers.ImageField(source="organization.banner", read_only=True)
+    membership_id = serializers.IntegerField(source="id", read_only=True)
+    role = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    joined_at = serializers.DateTimeField(read_only=True)
     
+
+    class Meta:
+        model = Membership
+        fields = [
+            "membership_id",
+            "organization_id",
+            "organization_name",
+            "organization_photo",
+            "banner",
+            "role",
+            "status",
+            "joined_at",
+        ]
+    
+    
+    
+class OrganizationProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=Organization
+        fields=["id","name","bio","banner",'phone','photo']
