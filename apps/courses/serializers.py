@@ -444,3 +444,20 @@ class courseOverviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ['id', 'title', 'description', 'thumbnail', 'thumbnail_video', 'category_name', 'language', 'level', 'price', 'discount_price',]
+        
+        
+        
+class OrganizationCourseReviewListSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    reviewer_name = serializers.CharField(source='user.name', read_only=True)
+    course_counts = serializers.SerializerMethodField()
+    
+
+    class Meta:
+        model = Review
+        fields = ['id', 'course', 'course_title', 'reviewer_name', 'comment', 'created_at', 'course_counts']
+        read_only_fields = ['id', 'course', 'user', 'created_at']
+        
+        
+    def get_course_counts(self, obj):
+        return Review.objects.filter(course=obj.course).count()

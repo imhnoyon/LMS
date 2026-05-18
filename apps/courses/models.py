@@ -283,6 +283,7 @@ class Review(models.Model):
         return f"Review by {self.user.full_name} - {self.rating} Stars"
 
 
+
 class LiveClass(models.Model):
     PLATFORM_CHOICES = [
         ('google_meet', 'Google Meet'),

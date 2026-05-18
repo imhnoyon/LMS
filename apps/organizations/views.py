@@ -496,7 +496,7 @@ class OrganizationLiveSessionUploadView(APIView):
         )
 
 class OrganizationDashboardView(APIView):
-    permission_classes = [IsAuthenticated, IsOrganization]
+    permission_classes = [IsAuthenticated,]
 
     def get(self, request):
         user = request.user
@@ -504,7 +504,7 @@ class OrganizationDashboardView(APIView):
         #  get organization (admin/manager only)
         membership = Membership.objects.filter(
             user=user,
-            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER, Membership.Role.INSTRUCTOR],
             status=Membership.Status.ACTIVE
         ).select_related("organization").first()
 
@@ -1350,3 +1350,64 @@ class OrganizationProfileView(APIView):
             data=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+        
+        
+        
+class InstructorContractCourseListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get("search", "").strip()
+        category = request.query_params.get("category", "").strip()
+        
+        # Logged in instructor membership
+        instructor_memberships = Membership.objects.filter(user=request.user)
+        
+        if search:
+            instructor_memberships = instructor_memberships.filter(
+                Q(organization__courses__title__icontains=search) 
+                
+            )
+        
+        if category:
+            instructor_memberships = instructor_memberships.filter(
+                Q(organization__courses__category__name__icontains=category)
+            )
+
+        contracts = Contract.objects.filter(instructor__in=instructor_memberships).select_related("course","organization","instructor",).order_by("-created_at")
+        paginator=self.paginator_class()
+        paginated_contracts=paginator.paginate_queryset(contracts,request,view=self)
+        serializer = InstructorContractCourseSerializer(
+            paginated_contracts,
+            many=True,
+            context={"request": request}
+        )
+
+        return  paginator.get_paginated_response(
+            data=serializer.data,
+            message="Course review list retrieved successfully"
+        )
+        
+        
+        
+class InstructorContractCategoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+       
+        # Logged in instructor membership
+        instructor_memberships = Membership.objects.filter(user=request.user)
+        
+        contracts = Contract.objects.filter(instructor__in=instructor_memberships).select_related("course","organization","instructor",).order_by("-created_at")
+        serializer = InstructorContractCategorySerializer(
+            contracts,
+            many=True
+        )
+
+        return APIResponse.success(
+            message="Instructor contract category list retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+        

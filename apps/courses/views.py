@@ -812,13 +812,14 @@ class InstructorLiveClassStatsView(APIView):
         if request.user.role == "Or_admin":
              membership = Membership.objects.filter(
                 user=request.user,
-                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER,],
                 status=Membership.Status.ACTIVE
             ).first()
              if membership:
                  live_classes = LiveClass.objects.filter(course__organization=membership.organization)
              else:
                  live_classes = LiveClass.objects.none()
+                 
         else:
             live_classes = LiveClass.objects.filter(instructor=request.user)
         
@@ -1145,7 +1146,9 @@ class MyCourseDetailsAPIView(APIView):
         course = get_object_or_404(
             Course.objects.select_related("instructor", "category", "advance_info"),
             pk=pk,
-            instructor=request.user   
+            instructor=request.user,
+            
+            
         )
 
         serializer = CourseDetailspageSerializer(
@@ -1328,3 +1331,61 @@ class CourseSectionAPIView(APIView):
 
         serializer = sectiondetailserializer(sections, many=True,context={"request": request})
         return Response(serializer.data)
+    
+    
+    
+    
+class OrganizationCourseReviewListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+
+        # Logged-in user's organization course reviews
+        organization_ids = Membership.objects.filter(
+            user=request.user,
+            status=Membership.Status.ACTIVE,
+            role__in=[
+                Membership.Role.ADMIN,
+                Membership.Role.MANAGER
+            ],
+        ).values_list("organization_id", flat=True)
+
+        reviews = Review.objects.filter(
+            course__organization_id__in=organization_ids
+        ).select_related(
+            "course",
+            "user"
+        ).order_by("-created_at")
+
+        # Dynamic stats from database
+        review_stats = reviews.aggregate(
+            average_rating=Avg("rating"),
+            total_reviews=Count("id")
+        )
+        total_enrolled_students = Enrollment.objects.filter(
+            course__organization_id__in=organization_ids
+        ).values("user_id").distinct().count()
+
+        # Pagination
+        paginator = self.paginator_class()
+        paginated_reviews = paginator.paginate_queryset(
+            reviews,
+            request
+        )
+
+        serializer = OrganizationCourseReviewListSerializer(
+            paginated_reviews,
+            many=True
+        )
+
+        response = paginator.get_paginated_response(
+            data=serializer.data,
+            message="Course review list retrieved successfully"
+        )
+
+        response.data["average_rating"] = review_stats.get("average_rating") or 0
+        response.data["total_reviews"] = review_stats.get("total_reviews") or 0
+        response.data["total_enrolled_students"] = total_enrolled_students
+
+        return response

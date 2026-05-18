@@ -402,3 +402,30 @@ class OrganizationProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model=Organization
         fields=["id","name","bio","banner",'phone','photo']
+        
+        
+        
+class InstructorContractCourseSerializer(serializers.ModelSerializer):
+    course_id = serializers.IntegerField(source="course.id", read_only=True)
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    organization_id = serializers.IntegerField(source="organization.id", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    course_price = serializers.DecimalField(source="course.discount_price", max_digits=10, decimal_places=2, read_only=True)
+    course_category = serializers.CharField(source="course.category.name", read_only=True)
+    course_thumbnail = serializers.ImageField(source="course.advance_info.thumbnail", read_only=True)
+
+    class Meta:
+        model = Contract
+        fields = ["id","organization_id",'course_category',"organization_name","course_id","course_title","course_price","revenue_share","expiry_date","status",'course_thumbnail',"created_at",]
+        
+        
+class InstructorContractCategorySerializer(serializers.ModelSerializer):
+    category_id = serializers.IntegerField(source="course.category.id", read_only=True)
+    course_category = serializers.CharField(source="course.category.name", read_only=True)
+
+    class Meta:
+        model = Contract
+        fields = ['category_id','course_category',]
+        
+        
+        

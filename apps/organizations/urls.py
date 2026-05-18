@@ -60,7 +60,8 @@ urlpatterns = [
     # organization members instructor 
     path("instructor/organizations/", InstructorOrganizationListAPIView.as_view(), name="instructor-organizations"),
     
-    
+    path("instructor/contracts/courses/",InstructorContractCourseListView.as_view(),name="instructor-contract-course-list",),
+    path("instructor/contracts/categories/",InstructorContractCategoryListView.as_view(),name="instructor-contract-category-list",),
     
 
 ]
