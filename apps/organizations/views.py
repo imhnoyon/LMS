@@ -1411,3 +1411,5 @@ class InstructorContractCategoryListView(APIView):
             status_code=status.HTTP_200_OK
         )
         
+        
+        

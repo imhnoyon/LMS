@@ -461,3 +461,37 @@ class OrganizationCourseReviewListSerializer(serializers.ModelSerializer):
         
     def get_course_counts(self, obj):
         return Review.objects.filter(course=obj.course).count()
+    
+    
+    
+    
+# serializers.py
+
+class LiveClassOrInstructorSerializer(serializers.ModelSerializer):
+    instructor_name = serializers.CharField(source='instructor.name', read_only=True)
+    course_title = serializers.CharField(source='course.title',read_only=True)
+    is_recorded = serializers.BooleanField(required=False)
+
+    class Meta:
+        model = LiveClass
+        fields = ['id','title','instructor','instructor_name','course','course_title','topic','scheduled_date',
+            'scheduled_time','is_present','platform','class_link','is_recorded','created_at'
+        ]
+
+        read_only_fields = ['id','instructor','course','created_at']
+
+    def validate_platform(self, value):
+
+        normalized = value.lower().replace(" ", "_")
+
+        valid_choices = [
+            choice[0]
+            for choice in LiveClass.PLATFORM_CHOICES
+        ]
+
+        if normalized not in valid_choices:
+            raise serializers.ValidationError(
+                f"Invalid platform. Choose from: {', '.join(valid_choices)}"
+            )
+
+        return normalized

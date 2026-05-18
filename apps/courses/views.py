@@ -11,12 +11,13 @@ from .serializers import *
 from utils.api_response import APIResponse
 from utils.paginations import CustomPagination
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import json
 from datetime import date, timedelta
 from apps.enrollments.models import Enrollment
 from apps.payments.models import Commission
-from apps.organizations.models import Membership
+from apps.organizations.models import Membership, Contract
 from apps.instructors.models import Instructor
 
 # Helper function to check course ownership or organization access
@@ -1389,3 +1390,263 @@ class OrganizationCourseReviewListView(APIView):
         response.data["total_enrolled_students"] = total_enrolled_students
 
         return response
+    
+    
+    
+    
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+
+class LiveClassManageView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def post(self, request, course_id):
+
+        course = get_object_or_404(
+            Course,
+            Q(pk=course_id) & (
+
+                # Direct course instructor
+                Q(instructor=request.user)
+
+                # Organization admin/manager
+                | Q(
+                    organization__memberships__user=request.user,
+                    organization__memberships__status=Membership.Status.ACTIVE,
+                    organization__memberships__role__in=[
+                        Membership.Role.ADMIN,
+                        Membership.Role.MANAGER,
+                    ]
+                )
+
+                # Organization instructor via contract
+                | Q(
+                    contracts__instructor__user=request.user,
+                    contracts__instructor__status=Membership.Status.ACTIVE,
+                    contracts__instructor__role=Membership.Role.INSTRUCTOR,
+                )
+            )
+        )
+
+        serializer = LiveClassSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(
+                course=course,
+                instructor=request.user
+            )
+
+            return APIResponse.success(
+                message="Live class scheduled successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+
+        return APIResponse.error(
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+        
+class LiveClassOrInstructorManageView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def post(self, request, course_id):
+
+        # Check course access
+        course = get_object_or_404(
+            Course.objects.distinct(),
+            Q(id=course_id) & (
+
+                # Direct instructor
+                Q(instructor=request.user)
+
+                # Organization admin / manager
+                | Q(
+                    organization__memberships__user=request.user,
+                    organization__memberships__status=Membership.Status.ACTIVE,
+                    organization__memberships__role__in=[
+                        Membership.Role.ADMIN,
+                        Membership.Role.MANAGER,
+                    ]
+                )
+
+                # Organization instructor with contract
+                | Q(
+                    contracts__instructor__user=request.user,
+                    contracts__instructor__status=Membership.Status.ACTIVE,
+                    contracts__instructor__role=Membership.Role.INSTRUCTOR,
+                )
+            )
+        )
+
+        serializer = LiveClassOrInstructorSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save(
+                course=course,
+                instructor=request.user
+            )
+
+            return APIResponse.success(
+                message="Live class scheduled successfully.",
+                data=serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+
+        return APIResponse.error(
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+    
+    
+
+
+class LiveClassOrInstructorDeshboardManageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        now = timezone.now()
+
+        # Accessible courses
+        accessible_courses = Course.objects.distinct().filter(
+
+            # Direct instructor
+            Q(instructor=request.user)
+
+            # Organization admin / manager
+            | Q(
+                organization__memberships__user=request.user,
+                organization__memberships__status=Membership.Status.ACTIVE,
+                organization__memberships__role__in=[
+                    Membership.Role.ADMIN,
+                    Membership.Role.MANAGER,
+                ]
+            )
+
+            # Organization instructor with contract
+            | Q(
+                contracts__instructor__user=request.user,
+                contracts__instructor__status=Membership.Status.ACTIVE,
+                contracts__instructor__role=Membership.Role.INSTRUCTOR,
+            )
+        )
+
+        upcoming_live_classes = LiveClass.objects.filter(
+            course__in=accessible_courses
+        ).filter(
+            Q(scheduled_date__gt=now.date()) |
+            Q(
+                scheduled_date=now.date(),
+                scheduled_time__gte=now.time()
+            )
+        ).order_by(
+            'scheduled_date',
+            'scheduled_time'
+        )
+
+        past_live_classes = LiveClass.objects.filter(
+            course__in=accessible_courses
+        ).filter(
+            Q(scheduled_date__lt=now.date()) |
+            Q(
+                scheduled_date=now.date(),
+                scheduled_time__lt=now.time()
+            )
+        ).order_by(
+            '-scheduled_date',
+            '-scheduled_time'
+        )
+
+        upcoming_serialized = LiveClassOrInstructorSerializer(
+            upcoming_live_classes,
+            many=True,
+            context={"request": request}
+        ).data
+
+        past_serialized = LiveClassOrInstructorSerializer(
+            past_live_classes,
+            many=True,
+            context={"request": request}
+        ).data
+
+        return APIResponse.success(
+            message="Live classes retrieved successfully.",
+            data={
+                "total_live_classes":
+                    upcoming_live_classes.count()
+                    + past_live_classes.count(),
+
+                "upcoming_live_classes_count":
+                    upcoming_live_classes.count(),
+
+                "past_live_classes_count":
+                    past_live_classes.count(),
+
+                "upcoming_live_classes":
+                    upcoming_serialized,
+
+                "past_live_classes":
+                    past_serialized,
+            },
+            status_code=status.HTTP_200_OK,
+        )
+        
+
+class LiveClassContractAssignedManageView(APIView):
+    """Return live classes (upcoming & past) for courses assigned to the logged-in instructor via Contract."""
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def get(self, request):
+        now = timezone.now()
+
+        # Find course ids assigned to this user via Contract where contract is ongoing
+        course_ids = Contract.objects.filter(
+            instructor__user=request.user,
+            status=Contract.Status.ONGOING,
+        ).values_list("course_id", flat=True).distinct()
+
+        live_qs = LiveClass.objects.filter(course_id__in=course_ids)
+
+        upcoming_live_classes = live_qs.filter(
+            Q(scheduled_date__gt=now.date()) |
+            Q(scheduled_date=now.date(), scheduled_time__gte=now.time())
+        ).order_by('scheduled_date', 'scheduled_time')
+
+        past_live_classes = live_qs.filter(
+            Q(scheduled_date__lt=now.date()) |
+            Q(scheduled_date=now.date(), scheduled_time__lt=now.time())
+        ).order_by('-scheduled_date', '-scheduled_time')
+
+        upcoming_serialized = LiveClassOrInstructorSerializer(
+            upcoming_live_classes,
+            many=True,
+            context={"request": request}
+        ).data
+
+        past_serialized = LiveClassOrInstructorSerializer(
+            past_live_classes,
+            many=True,
+            context={"request": request}
+        ).data
+
+        return APIResponse.success(
+            message="Contract-assigned live classes retrieved successfully.",
+            data={
+                "total_live_classes": upcoming_live_classes.count() + past_live_classes.count(),
+                "upcoming_live_classes_count": upcoming_live_classes.count(),
+                "past_live_classes_count": past_live_classes.count(),
+                "upcoming_live_classes": upcoming_serialized,
+                "past_live_classes": past_serialized,
+            },
+            status_code=status.HTTP_200_OK,
+        )
+        
+   

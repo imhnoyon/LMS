@@ -429,3 +429,16 @@ class InstructorContractCategorySerializer(serializers.ModelSerializer):
         
         
         
+        
+        
+class OrganizationInstructorLiveClassDeshboardSerializer(serializers.ModelSerializer):
+    course_id = serializers.IntegerField(source="course.id", read_only=True)
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    live_sessions_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Contract
+        fields = ["id","course_id","course_title","live_sessions_count"]
+        
+        
+ 

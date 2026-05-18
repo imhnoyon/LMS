@@ -56,5 +56,10 @@ urlpatterns = [
     
     # Organization courses reviews
     path('organizations/courses/reviews/', views.OrganizationCourseReviewListView.as_view(), name='organization-course-reviews'),
+    
+    path('courses/<int:course_id>/live-classes/', views.LiveClassOrInstructorManageView.as_view(), name='live-class-or-instructor-manage'),
+   
+    # Live classes for courses assigned via Contract (no course_id required)
+    path('/live-classes/deshboard/', views.LiveClassContractAssignedManageView.as_view(), name='contract-live-classes'),
 
 ]
