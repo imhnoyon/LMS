@@ -1410,6 +1410,61 @@ class InstructorContractCategoryListView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+
+
+class InstructorEarningsChartAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsInstructor]
+
+    def get(self, request):
+        instructor_memberships = Membership.objects.filter(
+            user=request.user,
+            role=Membership.Role.INSTRUCTOR,
+            status=Membership.Status.ACTIVE,
+        ).select_related("organization")
+
+        contracts = Contract.objects.filter(
+            instructor__in=instructor_memberships
+        ).select_related(
+            "course",
+            "organization",
+            "instructor__user",
+        ).order_by("-created_at")
+
+        assigned_course_list = []
+        total_earning_amount = Decimal("0.00")
+
+        for contract in contracts:
+            discount_price = contract.course.discount_price or Decimal("0.00")
+            assigned_percentage = Decimal(str(contract.revenue_share or 0))
+            calculated_earning = (discount_price * assigned_percentage) / Decimal("100")
+            total_earning_amount += calculated_earning
+
+            assigned_course_list.append({
+                "contract_id": contract.id,
+                "course_id": contract.course.id if contract.course else None,
+                "course_title": contract.course.title if contract.course else None,
+                "organization_id": contract.organization.id if contract.organization else None,
+                "organization_name": contract.organization.name if contract.organization else None,
+                "discount_price": discount_price,
+                "assigned_percentage": assigned_percentage,
+                "calculated_earning": calculated_earning,
+                "expiry_date": contract.expiry_date,
+                "status": contract.status,
+            })
+
+        total_assigned_courses = contracts.values("course_id").distinct().count()
+
+        serializer = EarningsChartSerializer({
+            "total_assigned_courses": total_assigned_courses,
+            "total_earning_amount": total_earning_amount,
+            "assigned_course_list": assigned_course_list,
+        })
+
+        return APIResponse.success(
+            message="Instructor earnings chart retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+        )
         
         
         

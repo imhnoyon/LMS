@@ -441,4 +441,21 @@ class OrganizationInstructorLiveClassDeshboardSerializer(serializers.ModelSerial
         fields = ["id","course_id","course_title","live_sessions_count"]
         
         
- 
+class EarningsChartSerializer(serializers.Serializer):
+    total_assigned_courses = serializers.IntegerField()
+    total_earning_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    assigned_course_list = serializers.ListField(child=serializers.DictField())
+
+
+class InstructorEarningsChartItemSerializer(serializers.Serializer):
+    contract_id = serializers.IntegerField()
+    course_id = serializers.IntegerField()
+    course_title = serializers.CharField()
+    organization_id = serializers.IntegerField()
+    organization_name = serializers.CharField()
+    discount_price = serializers.DecimalField(max_digits=12, decimal_places=2)
+    assigned_percentage = serializers.DecimalField(max_digits=10, decimal_places=2)
+    calculated_earning = serializers.DecimalField(max_digits=12, decimal_places=2)
+    expiry_date = serializers.DateField(allow_null=True)
+    status = serializers.CharField()
+    

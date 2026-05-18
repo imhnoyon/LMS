@@ -62,6 +62,10 @@ urlpatterns = [
     
     path("instructor/contracts/courses/",InstructorContractCourseListView.as_view(),name="instructor-contract-course-list",),
     path("instructor/contracts/categories/",InstructorContractCategoryListView.as_view(),name="instructor-contract-category-list",),
+    path("instructor/earnings/chart/",InstructorEarningsChartAPIView.as_view(),name="instructor-earnings-chart",),
+    
+    
+    # path("earnings/summary/", EarningsChartSerializer.as_view(), name="earnings-summary"),
     
 
 ]
