@@ -1147,10 +1147,32 @@ class MyCourseDetailsAPIView(APIView):
         course = get_object_or_404(
             Course.objects.select_related("instructor", "category", "advance_info"),
             pk=pk,
-            instructor=request.user,
-            
-            
         )
+
+        has_direct_access = course.instructor == request.user
+        has_org_admin_access = False
+        has_contract_access = False
+
+        if course.organization:
+            has_org_admin_access = Membership.objects.filter(
+                organization=course.organization,
+                user=request.user,
+                status=Membership.Status.ACTIVE,
+                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+            ).exists()
+
+            has_contract_access = Contract.objects.filter(
+                course=course,
+                instructor__user=request.user,
+                instructor__status=Membership.Status.ACTIVE,
+                instructor__role=Membership.Role.INSTRUCTOR,
+            ).exists()
+
+        if not (has_direct_access or has_org_admin_access or has_contract_access):
+            return APIResponse.error(
+                message="Access denied or course not found.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = CourseDetailspageSerializer(
             course,
