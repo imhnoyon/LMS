@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.orders.models import WishlistItem
 from .models import *
 from apps.instructors.models import Instructor
 import json
@@ -15,10 +17,10 @@ class CourseBasicSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             'id', 'title', 'subtitle', 'category', 'topic',
-            'language', 'level', 'price', 'discount_price',
-            'coupon_code', 'expiry_type', 'status'
+            'language', 'level', 'price', 'discount_price','duration',
+            'coupon_code', 'expiry_type', 'status', 'organization'
         ]
-        read_only_fields = ['id', 'status']
+        read_only_fields = ['id', 'status', 'organization']
 
 
 # Advance Information serializer
@@ -172,8 +174,8 @@ class CourseAdvanceInfoSerializer(serializers.ModelSerializer):
 class LectureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecture
-        fields = ['id', 'name', 'order', 'description', 'video_file', 'LectureAttachment', 'LectureNoteFile',]
-        
+        fields = ['id', 'name', 'order', 'description', 'video_file', 'LectureAttachment', 'LectureNoteFile','lecture_notes']
+           
     def create(self, validated_data):
         section = validated_data.get('section')
 
@@ -187,10 +189,19 @@ class LectureSerializer(serializers.ModelSerializer):
 
 class SectionSerializer(serializers.ModelSerializer):
     lectures = LectureSerializer(many=True, read_only=True)
+    quizze_id = serializers.SerializerMethodField()
+    quizz_title = serializers.SerializerMethodField()
     class Meta:
         model = Section
-        fields = ['id', 'name', 'order', 'lectures']
+        fields = ['id','quizze_id','quizz_title', 'name', 'order', 'lectures', ]
 
+    def get_quizze_id(self, obj):
+        quiz = Quiz.objects.filter(section=obj).first()
+        return quiz.id if quiz else None
+    
+    def get_quizz_title(self, obj):
+        quiz = Quiz.objects.filter(section=obj).first()
+        return quiz.title if quiz else None
 
 
 class QuestionOptionSerializer(serializers.ModelSerializer):
@@ -230,7 +241,15 @@ class QuizSerializer(serializers.ModelSerializer):
             'questions'
         ]
         
-        
+
+class sectiondetailserializer(serializers.ModelSerializer):
+    lectures = LectureSerializer(many=True, read_only=True)
+    quizzes = QuizSerializer(many=True, read_only=True)
+    class Meta:
+        model = Section
+        fields = ['id', 'name', 'order', 'lectures', 'quizzes']    
+    
+    
     
 # Course details serializers
 class CourseAdvanceInfoDetailSerializer(serializers.ModelSerializer):
@@ -260,9 +279,17 @@ class SectionDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'order', 'lectures', ]
         
 class InstructorDetailSerializer(serializers.ModelSerializer):
+    get_biography = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'name', 'email', 'phone', 'get_biography','avatar']
+
+    def get_get_biography(self, obj):
+        instructor = getattr(obj, "instructor", None)
+        if instructor and getattr(instructor, "biography", None):
+            return instructor.biography
+        return None
         
 class CourseDetailSerializer(serializers.ModelSerializer):
     advance_info = CourseAdvanceInfoDetailSerializer(read_only=True)
@@ -270,13 +297,40 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     requirements = CourseRequirement(many=True, read_only=True)
     sections = SectionDetailSerializer(many=True, read_only=True)
     instructor = InstructorDetailSerializer(read_only=True)
-    modules=serializers.CharField(source='sections.count', read_only=True)
+    modules = serializers.IntegerField(source='sections.count', read_only=True)
+    lectures = serializers.IntegerField(read_only=True)
+    quizes = serializers.IntegerField(source='quizzes_count', read_only=True)
+    is_wishlisted = serializers.SerializerMethodField()
+    reviews_count = serializers.IntegerField(source='reviews.count', read_only=True)
+    description = serializers.CharField(source='advance_info.description', read_only=True)
+    
+    related_courses = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
-        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language', 'level', 'price','rating', 'discount_price', 'coupon_code', 'expiry_type','rating', 'status','modules','instructor','advance_info', 'outcomes','requirements','sections'] 
+        fields = ['id', 'title','subtitle', 'Category', 'topic', 'language','description', 'level', 'price','rating','duration', 'discount_price', 'coupon_code','is_wishlisted', 'expiry_type','rating','reviews_count', 'status','modules','lectures','quizes','instructor','advance_info', 'outcomes','requirements','sections', 'related_courses'] 
+        
+    def get_is_wishlisted(self, obj):
+        user = self.context.get('request').user
+        if user.is_authenticated:
+            return WishlistItem.objects.filter(wishlist__user=user, course=obj).exists()
+        return False
+    
+    def get_related_courses(self, obj):
+        related = Course.objects.filter(
+            category=obj.category
+        ).exclude(id=obj.id)[:5]
+
+        return [
+            {
+                "id": course.id,
+                "title": course.title
+            }
+            for course in related
+        ]
         
 # Course details serializers ended here
+
 
 # Live Class Serializers
 class LiveClassSerializer(serializers.ModelSerializer):
@@ -290,7 +344,7 @@ class LiveClassSerializer(serializers.ModelSerializer):
         model = LiveClass
         fields = [
             'id', 'title', 'instructor', 'instructor_name', 'course', 'course_title',
-            'topic', 'scheduled_date', 'scheduled_time',
+            'topic', 'scheduled_date', 'scheduled_time','is_present',
             'platform', 'class_link', 'is_recorded',  'created_at'
         ]
         read_only_fields = ['id', 'instructor', 'course', 'created_at']
@@ -317,3 +371,127 @@ class LiveClassAttendanceSerializer(serializers.ModelSerializer):
             'status', 'joined_at', 'left_at'
         ]
         read_only_fields = ['id', 'joined_at', 'left_at']
+
+
+# Course Admin Review History Serializer
+class courseReviewHistorySerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    instructor_name = serializers.CharField(source='course.instructor.name', read_only=True)
+    reviewer_name = serializers.CharField(source='user.name', read_only=True)
+
+    class Meta:
+        model = CourseReviewHistory
+        fields = ['id', 'course', 'course_title', 'instructor_name', 'reviewer_name', 'status', 'reviewed_at']
+        read_only_fields = ['id', 'course', 'user', 'status', 'reviewed_at']
+        
+        
+        
+class instructorSerializers(serializers.ModelSerializer):
+    avatar = serializers.ImageField(source='user.avatar', read_only=True)
+    class Meta:
+        model = Instructor
+        fields = ['id', 'Instructor_name', 'title','biography','avatar']
+        
+        
+    def get_avatar(self, obj):
+        if obj.user.avatar:
+            return obj.user.avatar.url
+        return None
+    
+    
+    
+class courseInformationserializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'subtitle']
+        
+        
+        
+        
+class CommentLectureSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.name", read_only=True)
+    replies = serializers.SerializerMethodField()
+    image = serializers.ImageField(source='user.avatar', read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ['id', 'lecture', 'user_name', 'text', 'parent', 'replies','image', 'created_at']
+
+    def get_replies(self, obj):
+        return CommentLectureSerializer(obj.replies.all(), many=True, context=self.context).data
+    
+    
+    
+    
+class CourseDetailspageSerializer(serializers.ModelSerializer):
+    instructor = InstructorDetailSerializer(read_only=True)
+    category = CategorySerializer(read_only=True)
+    
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'subtitle', 'category', 'topic', 'language', 'level', 'price', 'discount_price','rating', 'coupon_code', 'expiry_type', 'status', 'created_at','instructor']
+        
+        
+        
+        
+class courseOverviewSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    thumbnail = serializers.ImageField(source='advance_info.thumbnail', read_only=True)
+    description = serializers.CharField(source='advance_info.description', read_only=True)
+    thumbnail_video = serializers.FileField(source='advance_info.trailer_video', read_only=True)
+    
+    
+    class Meta:
+        model = Course
+        fields = ['id', 'title', 'description', 'thumbnail', 'thumbnail_video', 'category_name', 'language', 'level', 'price', 'discount_price',]
+        
+        
+        
+class OrganizationCourseReviewListSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    reviewer_name = serializers.CharField(source='user.name', read_only=True)
+    course_counts = serializers.SerializerMethodField()
+    
+
+    class Meta:
+        model = Review
+        fields = ['id', 'course', 'course_title', 'reviewer_name', 'comment', 'created_at', 'course_counts']
+        read_only_fields = ['id', 'course', 'user', 'created_at']
+        
+        
+    def get_course_counts(self, obj):
+        return Review.objects.filter(course=obj.course).count()
+    
+    
+    
+    
+# serializers.py
+
+class LiveClassOrInstructorSerializer(serializers.ModelSerializer):
+    instructor_name = serializers.CharField(source='instructor.name', read_only=True)
+    course_title = serializers.CharField(source='course.title',read_only=True)
+    is_recorded = serializers.BooleanField(required=False)
+
+    class Meta:
+        model = LiveClass
+        fields = ['id','title','instructor','instructor_name','course','course_title','topic','scheduled_date',
+            'scheduled_time','is_present','platform','class_link','is_recorded','created_at'
+        ]
+
+        read_only_fields = ['id','instructor','course','created_at']
+
+    def validate_platform(self, value):
+
+        normalized = value.lower().replace(" ", "_")
+
+        valid_choices = [
+            choice[0]
+            for choice in LiveClass.PLATFORM_CHOICES
+        ]
+
+        if normalized not in valid_choices:
+            raise serializers.ValidationError(
+                f"Invalid platform. Choose from: {', '.join(valid_choices)}"
+            )
+
+        return normalized

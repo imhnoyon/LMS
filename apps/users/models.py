@@ -49,7 +49,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = [
         ("owner", "Platform Owner"),
-        ("admin", "Admin"),
+        ("Or_admin", "Or_Admin"),
         ("manager", "Manager"),
         ("reviewer", "Reviewer"),
         ("finance", "Finance"),
@@ -67,9 +67,12 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    signature = models.ImageField(upload_to="signatures/", blank=True, null=True)
 
     is_verified = models.BooleanField(default=False)
     accepted_terms = models.BooleanField(default=False)
+    
+    platform_revenue= models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -93,6 +96,11 @@ class User(AbstractBaseUser, PermissionsMixin):
             return self.instructor.biography
         return None
     
+    def signature_url(self):
+        if self.signature:
+            return self.signature.url
+        return None
+
     def __str__(self):
         return f"{self.email} ({self.get_role_display()})"
 

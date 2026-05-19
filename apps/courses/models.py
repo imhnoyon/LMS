@@ -50,6 +50,7 @@ class Course(models.Model):
 ]
 
     instructor     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
+    organization   = models.ForeignKey('organizations.Organization', on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
     title          = models.CharField(max_length=80)
     subtitle       = models.CharField(max_length=120, blank=True)
     category       = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='courses')
@@ -61,6 +62,7 @@ class Course(models.Model):
     coupon_code = models.CharField(max_length=50, null=True, blank=True)
     expiry_type    = models.CharField(max_length=20, choices=EXPIRY_DURATION_CHOICES, default='1_week')
     expiry_date = models.DateTimeField(null=True, blank=True)
+    duration= models.CharField(max_length=50, null=True, blank=True)
     status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
@@ -80,9 +82,19 @@ class Course(models.Model):
             return None
         return self.category.name
     
+    def lectures(self):
+        """Returns the total number of lectures in all sections of this course."""
+        return Lecture.objects.filter(section__course=self).count()
+
+    def quizzes_count(self):
+        """Returns the total number of quizzes in all sections and lectures of this course."""
+        return Quiz.objects.filter(
+            models.Q(section__course=self) | models.Q(lecture__section__course=self)
+        ).distinct().count()
+
     def get_progress_percentage(self, user):
         """Calculates the course progress percentage for a specific user based on lectures."""
-        total_lectures = Lecture.objects.filter(section__course=self).count()
+        total_lectures = self.lectures()
         if total_lectures == 0:
             return 0
         
@@ -170,6 +182,7 @@ class Lecture(models.Model):
     video_file= models.FileField(upload_to='lectures/videos/', null=True, blank=True)
     LectureAttachment = models.FileField(upload_to='lectures/attachments/', null=True, blank=True)
     LectureNoteFile= models.FileField(upload_to='lectures/notes/', null=True, blank=True)
+    lecture_notes = models.TextField(blank=True)
     
     class Meta:
         ordering = ['order']
@@ -242,6 +255,7 @@ class TrueFalseAnswer(models.Model):
 
 class Comment(models.Model):
     course     = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='comments')
+    lecture   = models.ForeignKey(Lecture, on_delete=models.CASCADE, related_name='comments', null=True, blank=True)
     user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_comments')
     parent     = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
     text       = models.TextField()
@@ -250,8 +264,8 @@ class Comment(models.Model):
 
     def __str__(self):
         if self.parent:
-            return f"Reply by {self.user.username} on {self.course.title}"
-        return f"Comment by {self.user.username} on {self.course.title}"
+            return f"Reply by {self.user.full_name} on {self.lecture.name}"
+        return f"Comment by {self.user.full_name} on {self.lecture.name}"
 
 
 class Review(models.Model):
@@ -266,7 +280,8 @@ class Review(models.Model):
         unique_together = ('course', 'user')
 
     def __str__(self):
-        return f"Review by {self.user.name} - {self.rating} Stars"
+        return f"Review by {self.user.full_name} - {self.rating} Stars"
+
 
 
 class LiveClass(models.Model):
@@ -286,6 +301,7 @@ class LiveClass(models.Model):
     class_link       = models.URLField()
     is_recorded      = models.BooleanField(default=False)
     recording_link   = models.URLField(blank=True, null=True)
+    is_present  = models.BooleanField(default=False)
     created_at       = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -341,3 +357,28 @@ class QuizAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.quiz.title if self.quiz else 'Quiz'} ({self.score_percentage}%)"
+    
+    
+    
+# This model is for uploading live class session recordings and linking them to the respective course and section.
+class sessionRecordUploader(models.Model):
+    course= models.ForeignKey(Course, on_delete=models.CASCADE, related_name='session_recordings')
+    course_name = models.CharField(max_length=255)
+    title = models.CharField(max_length=255)
+    recording_file = models.FileField(upload_to='live_classes/recordings/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recording for {self.title} - {self.course_name}"
+    
+    
+    
+#course review history model to track the status changes of a course (accepted, rejected, pending) along with the user who made the change and timestamp. This will help in auditing and understanding the review process for each course.
+class CourseReviewHistory(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='review_history')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_review_history')
+    status = models.CharField(max_length=20,)
+    reviewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-reviewed_at"]

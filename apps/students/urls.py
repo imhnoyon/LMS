@@ -20,11 +20,13 @@ urlpatterns = [
     path('enroll-courses/', EnrollCourseAPIView.as_view(), name='enroll-course'),
     
     path('exam-assessments-courses/', ExamAssessmentAPIView.as_view(), name='enroll-course'),
+    path("lecture-tracking/", CourseLectureTrackingProgressAPIView.as_view(), name="lecture-tracking"),
     path('course-completed/<int:course_id>/', CheckCourseCompletionView.as_view(), name='check-course-completion'),
     
     #review 
     path('reviews/<int:course_id>/', CreateReviewView.as_view(), name='course-reviews'),
     path('reviews-updated/<int:review_id>/', CreateReviewView.as_view(), name='course-reviews'),
+    path('reviews-deleted/<int:review_id>/', CourseReviewDeleted.as_view(), name='course-reviews'),
     path('review-list/', ReviewListAPIView.as_view(), name='delete-review'),
     
     # quiz attempts-list
@@ -46,5 +48,10 @@ urlpatterns = [
     
     
     
+    # Live sessions classes
+    path("student/recordings/",StudentPurchasedCourseRecordingListView.as_view(),name="student-purchased-recordings"),
+    path("student/recordings/<int:pk>/",StudentRecordingDetailView.as_view(),name="student-purchased-recording-detail"),
     
+    # 🔹 Certificates
+    path("student/certificates/", StudentCertificateListView.as_view(), name="student-certificates"),
 ]

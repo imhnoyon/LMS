@@ -1,5 +1,6 @@
+import base64
 import calendar
-from rest_framework.views import APIView
+from rest_framework.views import APIView, Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -12,11 +13,13 @@ from apps.payments.models import Commission, Withdrawal
 from utils.api_response import APIResponse
 from utils.paginations import CustomPagination
 from apps.courses.models import Course, LiveClass, Review
-from utils.permissions import IsInstructor, IsStudent
+from utils.permissions import IsInstructor, IsOrganization, IsStudent
 from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
 from django.db.models.functions import TruncDate, TruncMonth
+from rest_framework.parsers import MultiPartParser, FormParser
+from apps.organizations.serializers import LiveSessionUploaderSerializer
 
 # List pending instructors for admin review
 class PendingInstructorListView(APIView):
@@ -129,11 +132,11 @@ class CourseListView(APIView):
     def get(self, request):
         search = request.query_params.get("search")
         category = request.query_params.get("category")
-        status_param = request.query_params.get("status")
+        status = request.query_params.get("status")
         language = request.query_params.get("language")
         level = request.query_params.get("level")
 
-        courses = Course.objects.all().order_by("-id")
+        courses = Course.objects.filter(instructor=request.user).order_by("-id")
 
         if search:
             courses = courses.filter(
@@ -145,8 +148,8 @@ class CourseListView(APIView):
         if category:
             courses = courses.filter(category_id=category)
 
-        if status_param:
-            courses = courses.filter(status__iexact=status_param)
+        if status:
+            courses = courses.filter(status__iexact=status)
 
         if language:
             courses = courses.filter(language__iexact=language)
@@ -154,15 +157,15 @@ class CourseListView(APIView):
         if level:
             courses = courses.filter(level__iexact=level)
 
-        # top summary stats
-        all_course_stats = Course.objects.aggregate(
-            approved_courses=Count("id", filter=Q(status="Accepted")),
-            published_courses=Count("id", filter=Q(status="Published")),
-            pending_review_courses=Count("id", filter=Q(status="Draft")),
-            
+        # top summary stats (for this instructor)
+        all_course_stats = Course.objects.filter(instructor=request.user).aggregate(
+            approved_courses=Count("id", filter=Q(status="accepted")),
+            published_courses=Count("id", filter=Q(status="published")),
+            pending_review_courses=Count("id", filter=Q(status="draft")),
         )
-        certificates_issued = Course.objects.filter(enrollments__is_completed=True).distinct().count()
-        ratings_people = Review.objects.values("course").annotate(count=Count("id")).count()
+
+        certificates_issued = Course.objects.filter(instructor=request.user, enrollments__is_completed=True).distinct().count()
+        ratings_people = Review.objects.filter(course__instructor=request.user).values("course").annotate(count=Count("id")).count()
         
 
         paginator = self.pagination_class()
@@ -205,7 +208,7 @@ class InstructorProfileUpdateView(APIView):
             context={"request": request}
         )
         return APIResponse.success(
-            message="Instructor profile retrieved successfully.",
+            message="Instructor profile retrieved.",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
@@ -217,7 +220,7 @@ class InstructorProfileUpdateView(APIView):
             instructor,
             data=request.data,
             partial=True,
-            context={"request": request}
+            context={"request": request}   
         )
 
         if serializer.is_valid():
@@ -306,16 +309,6 @@ class InstructorDashboardView(APIView):
         ).values("day").annotate(
             total=Sum("commission_amount")
         ).order_by("day")
-
-
-        # monthly_revenue_chart = [
-        #     {
-        #         "label": row["day"].strftime("%b %d"),
-        #         "amount": row["total"] or Decimal("0.00")
-        #     }
-        #     for row in revenue_rows
-        # ]
-        
         
         current_year = today.year
 
@@ -423,7 +416,7 @@ class InstructorEarningsView(APIView):
         user = request.user
         today = timezone.now().date()
 
-        total_revenue = Commission.objects.filter( user=user ).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
+        total_revenue = Commission.objects.filter(user=user).aggregate( total=Sum("commission_amount"))["total"] or Decimal("0.00")
 
         total_withdrawals = Withdrawal.objects.filter( user=user, status="completed" ).aggregate( total=Sum("amount"))["total"] or Decimal("0.00")
 
@@ -496,3 +489,372 @@ class WithdrawalRequestListView(APIView):
         serializer = WithdrawalRequestSerializer(paginated_data, many=True)
 
         return paginator.get_paginated_response(serializer.data)
+
+
+
+
+
+
+
+class InstructorLiveSessionUploadView(APIView):
+    permission_classes = [IsAuthenticated ,IsInstructor]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, course_id):
+        user = request.user
+        course = get_object_or_404(Course, id=course_id)
+
+        if user.role != "instructor":
+            return APIResponse.error(
+                message="Only instructors can upload videos.",
+                status_code=403
+            )
+
+        if getattr(course, "instructor_id", None) != user.id:
+            return APIResponse.error(
+                message="You can only upload videos to your own course.",
+                status_code=403
+            )
+
+        serializer = LiveSessionUploaderSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Upload failed.",
+                errors=serializer.errors,
+                status_code=400
+            )
+
+        serializer.save(course=course,course_name=course.title   
+        )
+
+        return APIResponse.success(
+            message="Video uploaded successfully to your course.",
+            data=serializer.data,
+            status_code=201
+        )
+        
+        
+
+class MyInstructorSignatureAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instructor = Instructor.objects.select_related('user').get(user=request.user)
+        serializer = InstructorSignatureSerializer(instructor, context={"request": request})
+
+        return Response({
+            "success": True,
+            "message": "Instructor signature retrieved successfully.",
+            "data": serializer.data
+        }, status=200)
+
+
+class InstructorCertificateListView(APIView):
+    permission_classes = [IsAuthenticated, ]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        user = request.user
+        
+        course_filters = Q(instructor=user, status="accepted")
+        
+        membership = Membership.objects.filter(
+            user=user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+        ).select_related("organization").first()
+        
+        if membership:
+            course_filters |= Q(organization=membership.organization, status="accepted")
+        
+        accepted_courses = Course.objects.filter(course_filters).distinct().order_by("-id")
+        
+        if not membership and not Instructor.objects.filter(user=user).exists():
+            return APIResponse.error(
+                message="You don't have permission to view certificate list.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(accepted_courses, request)
+
+        serializer = InstructorCertificateSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            data=serializer.data,
+            message="Instructor accepted courses retrieved successfully."
+        )
+        
+        
+        
+class MyInstructorProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instructor = get_object_or_404(
+            Instructor.objects.select_related('user').prefetch_related('user__courses', 'user__courses__reviews', 'user__courses__reviews__user'),
+            user=request.user
+        )
+        serializer = InstructorProfileDetailSerializer(instructor,context={'request': request})
+        return APIResponse.success(message="Instructor profile retrieved successfully.", data=serializer.data)
+    
+
+# Instructor List API for public listing
+class InstructorListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    def get(self, request,):
+        search = request.query_params.get("search", "").strip()
+        status_param = request.query_params.get("status", "").strip().upper()
+        include_top_param = request.query_params.get("include_top", "").strip().lower() in ("1", "true", "yes")
+
+        instructors = Instructor.objects.select_related("user").all()[:20]
+
+        if search:
+            instructors = instructors.filter(
+                Q(user__name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(user__phone__icontains=search) |
+                Q(id__icontains=search) |
+                Q(title__icontains=search)
+            )
+
+        if status_param:
+            if status_param == "ACTIVE":
+                instructors = instructors.filter(is_approved=True, user__is_active=True)
+            elif status_param == "PENDING":
+                instructors = instructors.filter(is_approved=False, user__is_active=True)
+            elif status_param == "SUSPENDED":
+                instructors = instructors.filter(user__is_active=False)
+
+        serializer = InstructorProfileListSerializer(instructors, many=True, context={"request": request})
+
+        # show top performers by default when user is not searching or filtering
+        include_top = include_top_param or (not search and not status_param)
+
+        # If frontend requests top performers, compute top 5 earners (by Commission)
+        if include_top:
+            from apps.payments.models import Commission
+            from django.db.models import Sum, Count
+
+            # Restrict commissions to users who are instructors
+            instructor_user_ids = Instructor.objects.values_list('user', flat=True)
+
+            top_qs = (
+                Commission.objects
+                .filter(user__in=instructor_user_ids)
+                .values('user')
+                .annotate(total_earned=Sum('commission_amount'), sales_count=Count('id'))
+                .order_by('-total_earned')[:5]
+            )
+
+            top_performers = []
+            for idx, item in enumerate(top_qs, start=1):
+                uid = item.get('user')
+                total = item.get('total_earned') or 0
+                sales = item.get('sales_count') or 0
+                user_obj = None
+                try:
+                    from apps.users.models import User as UserModel
+                    user_obj = UserModel.objects.filter(id=uid).first()
+                except Exception:
+                    user_obj = None
+
+                name = user_obj.name if user_obj and getattr(user_obj, 'name', None) else (user_obj.email if user_obj else None)
+                avatar = None
+                if user_obj and getattr(user_obj, 'avatar', None):
+                    req = request
+                    try:
+                        avatar = req.build_absolute_uri(user_obj.avatar.url) if req else user_obj.avatar.url
+                    except Exception:
+                        avatar = user_obj.avatar.url
+
+                # try to include instructor code/id
+                instr = Instructor.objects.filter(user_id=uid).first()
+                code = instr.id if instr else None
+
+                top_performers.append({
+                    'rank': idx,
+                    'user_id': uid,
+                    'name': name,
+                    'avatar': avatar,
+                    'code': code,
+                    'total_earned': format(total, '.2f'),
+                    'sales_count': sales,
+                })
+
+            return APIResponse.success(
+                message="Instructors retrieved successfully.",
+                data={
+                    'top_performers': top_performers,
+                    'instructors': serializer.data,
+                }
+            )
+
+        return APIResponse.success(message="Instructors retrieved successfully.", data=serializer.data)
+    
+    
+    
+class AdminInstructorDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk):
+        instructor = get_object_or_404(
+            Instructor.objects.select_related('user').prefetch_related('user__courses', 'user__courses__reviews', 'user__courses__reviews__user'),
+            id=pk
+        )
+        serializer = InstructorProfileDetailSerializer(instructor, context={'request': request})
+        return APIResponse.success(message="Instructor profile retrieved successfully.", data=serializer.data)
+    
+    
+    
+    
+class AdminInstructorListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = CustomPagination
+    def get(self, request,):
+        search = request.query_params.get("search", "").strip()
+        status_param = request.query_params.get("status", "").strip().upper()
+
+        instructors = Instructor.objects.select_related("user").all()
+
+        if search:
+            instructors = instructors.filter(
+                Q(user__name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(user__phone__icontains=search) |
+                Q(id__icontains=search) |
+                Q(title__icontains=search)
+            )
+
+        if status_param:
+            if status_param == "ACTIVE":
+                instructors = instructors.filter(is_approved=True, user__is_active=True)
+            elif status_param == "PENDING":
+                instructors = instructors.filter(is_approved=False, user__is_active=True)
+            elif status_param == "SUSPENDED":
+                instructors = instructors.filter(user__is_active=False)
+
+        paginator = self.pagination_class()
+        paginated_queryset = paginator.paginate_queryset(
+            instructors,
+            request
+        )
+
+        serializer = AdminInstructorProfileListSerializer(
+            paginated_queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            serializer.data,
+            message="Instructors retrieved successfully."
+        )
+
+
+# Signature upload views
+class SignatureUploadAPIView(APIView):
+    """Upload signature for instructors or organization members"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        """Upload signature for authenticated user or organization member"""
+        serializer = SignatureUploadSerializer(data=request.FILES)
+        
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Invalid signature file.",
+                data=serializer.errors,
+                status_code=400
+            )
+        
+        # Update user signature
+        signature_file = serializer.validated_data['signature']
+        request.user.signature = signature_file
+        request.user.save(update_fields=['signature', 'updated_at'])
+        
+        # If user is an instructor, also update instructor signature
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            instructor.signature = signature_file
+            instructor.save(update_fields=['signature', 'updated_at'])
+        except Instructor.DoesNotExist:
+            pass
+        
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature uploaded successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )
+
+
+class MyInstructorSignatureAPIView(APIView):
+    """Get/Update signature for instructor"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request):
+        """Get current user's signature"""
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature retrieved successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )
+
+    def patch(self, request):
+        """Upload/Update signature for current user"""
+        serializer = SignatureUploadSerializer(data=request.FILES)
+        
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="Invalid signature file.",
+                data=serializer.errors,
+                status_code=400
+            )
+        
+        # Delete old signature file if exists
+        if request.user.signature:
+            try:
+                request.user.signature.delete()
+            except:
+                pass
+        
+        # Update user signature
+        signature_file = serializer.validated_data['signature']
+        request.user.signature = signature_file
+        request.user.save(update_fields=['signature', 'updated_at'])
+        
+        # If user is an instructor, also update instructor signature
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            # Delete old signature file from instructor if exists
+            if instructor.signature:
+                try:
+                    instructor.signature.delete()
+                except:
+                    pass
+            instructor.signature = signature_file
+            instructor.save(update_fields=['signature', 'updated_at'])
+        except Instructor.DoesNotExist:
+            pass
+        
+        response_serializer = UserSignatureSerializer(request.user, context={"request": request})
+        
+        return APIResponse.success(
+            message="Signature uploaded successfully.",
+            data=response_serializer.data,
+            status_code=200
+        )

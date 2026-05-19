@@ -11,7 +11,7 @@ class CategoryAdmin(admin.ModelAdmin):
     
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title','subtitle', 'category', 'instructor','topic','language','level','price','discount_price','coupon_code','status','expiry_type', 'created_at')
+    list_display = ('id','title','subtitle', 'category', 'instructor','topic','language','level','price','discount_price','duration','coupon_code','status','expiry_type', 'created_at')
     list_filter = ('category', 'instructor', 'created_at')
     search_fields = ('title', 'subtitle', 'description')
     
@@ -148,3 +148,12 @@ class LecturesProgressAdmin(admin.ModelAdmin):
     list_display = ('course', 'user', 'lecture', 'is_completed')
     list_filter = ('course', 'user')
     search_fields = ('user__full_name',)
+    
+    
+    
+    
+@admin.register(CourseReviewHistory)
+class CourseReviewHistoryAdmin(admin.ModelAdmin):
+    list_display = ('course', 'user', 'status', 'reviewed_at')
+    list_filter = ('course', 'user', 'status')
+    

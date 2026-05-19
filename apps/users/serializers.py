@@ -56,3 +56,11 @@ class SendEmailSerializer(serializers.Serializer):
     to_email = serializers.EmailField()
     subject = serializers.CharField(max_length=255)
     message = serializers.CharField()
+    
+    
+    
+    
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["name","email","role", "phone",'avatar']

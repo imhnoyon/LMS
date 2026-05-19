@@ -28,7 +28,7 @@ class StudentDashboardView(APIView):
         active_courses_count = enrollments.filter(is_started=True).count()
         completed_courses_count = enrollments.filter(is_completed=True).count()
         recently_enrolled = [
-            enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:4]
+            enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:6]
         ]
 
         recent_invoices = Invoice.objects.filter(user=user).order_by("-invoice_date", "-created_at")[:10]
@@ -105,6 +105,8 @@ class CoursePlayerView(APIView):
                 "description": current_lecture.description,
                 "video_file": request.build_absolute_uri(current_lecture.video_file.url) if current_lecture.video_file else None,
                 "note_file": request.build_absolute_uri(current_lecture.LectureNoteFile.url) if current_lecture.LectureNoteFile else None,
+                "attachment_file": request.build_absolute_uri(current_lecture.LectureAttachment.url) if current_lecture.LectureAttachment else None,
+                "lecture_notes": current_lecture.lecture_notes,
             },
             "next_lecture": {
                 "id": next_content.id,
@@ -178,10 +180,12 @@ class StudentQuizView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, quiz_id):
         quiz = get_object_or_404(Quiz.objects.prefetch_related("questions__options"), id=quiz_id)
+        is_completed = QuizAttempt.objects.filter(user=request.user, quiz=quiz).exists()
         return APIResponse.success(data={
             "title": quiz.title, "description": quiz.description,
             "time_limit": quiz.time_limit_minutes,
-            "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data
+            "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data,
+            "is_completed": is_completed
         })
         
 
@@ -209,8 +213,19 @@ class QuizSubmissionView(APIView):
             course=quiz.section.course if quiz.section else quiz.lecture.section.course
         )
 
+        wrong_count = max(total_q - correct_count, 0)
+        score_pct = round(score_pct, 2)
+
         return APIResponse.success(data={
-            "score": score_pct, "passed": score_pct >= quiz.passing_score
+            "quiz_id": quiz.id,
+            "quiz_title": quiz.title,
+            "score": score_pct,
+            "completion_percentage": score_pct,
+            "total_questions": total_q,
+            "correct_answers": correct_count,
+            "wrong_answers": wrong_count,
+            "passed": score_pct >= quiz.passing_score,
+            "is_completed": True
         })
 
 
@@ -300,9 +315,13 @@ class ExamAssessmentAPIView(APIView):
         enrollments = Enrollment.objects.filter(user=request.user)
 
         # Filters
+        course_title = request.query_params.get("course_title")
         is_active = request.query_params.get("is_active")
         is_completed = request.query_params.get("is_completed")
         is_started = request.query_params.get("is_started")
+
+        if course_title:
+            enrollments = enrollments.filter(course__title__icontains=course_title)
 
         if is_active is not None:
             enrollments = enrollments.filter(is_active=is_active.lower() == "true")
@@ -313,17 +332,89 @@ class ExamAssessmentAPIView(APIView):
         if is_started is not None:
             enrollments = enrollments.filter(is_started=is_started.lower() == "true")
 
+        course_ids = enrollments.values_list("course_id", flat=True)
+
+        total_lectures_all_courses = Lecture.objects.filter(
+            section__course_id__in=course_ids
+        ).count()
+        completed_lectures_all_courses = LecturesProgress.objects.filter(
+            user=request.user,
+            is_completed=True,
+            lecture__section__course_id__in=course_ids
+        ).count()
+
+        average_completion_percentage = 0.0
+        if total_lectures_all_courses > 0:
+            average_completion_percentage = round(
+                (completed_lectures_all_courses / total_lectures_all_courses) * 100,
+                2
+            )
+
+        total_completed_courses = enrollments.filter(is_completed=True).count()
+        total_certificated_courses = Certificate.objects.filter(
+            enrollment__user=request.user,
+            enrollment__course_id__in=course_ids,
+        ).count()
+
+        completed_quiz_ids = set()
+        quiz_attempts = QuizAttempt.objects.filter(
+            user=request.user,
+            course_id__in=course_ids,
+        ).select_related("quiz").order_by("quiz_id", "-submitted_at")
+
+        seen_quiz_ids = set()
+        for attempt in quiz_attempts:
+            if attempt.quiz_id in seen_quiz_ids:
+                continue
+            seen_quiz_ids.add(attempt.quiz_id)
+            if attempt.score_percentage >= attempt.quiz.passing_score:
+                completed_quiz_ids.add(attempt.quiz_id)
+
         enrollments = enrollments.order_by("-id")
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(enrollments, request, view=self)
         serializer = ExamAssessmentSerializer(page, many=True, context={"request": request})
 
-        return paginator.get_paginated_response(
+        response = paginator.get_paginated_response(
             serializer.data,
             message="Exam assessment courses retrieved successfully."
         )
+        response.data["average_completion_percentage"] = average_completion_percentage
+        response.data["total_completed_courses"] = total_completed_courses
+        response.data["total_certificated_courses"] = total_certificated_courses
+        response.data["total_completed_quizzes"] = len(completed_quiz_ids)
+        return response
 
+
+
+class CourseLectureTrackingProgressAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        course_name = request.query_params.get("course_name")
+
+        progress_qs = LecturesProgress.objects.filter(user=user)\
+            .select_related('lecture', 'lecture__section__course')\
+            .order_by('-id')[:10]  # Limit to first 10 results
+
+        #  course name filter
+        if course_name:
+            progress_qs = progress_qs.filter(
+                lecture__section__course__title__icontains=course_name
+            )
+
+        serializer = coursemodelserializer(
+            progress_qs,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            data=serializer.data,
+            message="Course progress retrieved successfully"
+        )
     
 # Course Review APIView
 class CreateReviewView(APIView):
@@ -387,6 +478,10 @@ class CreateReviewView(APIView):
         )
         
         
+    
+    
+class CourseReviewDeleted(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
     def delete(self, request, review_id):
         review = get_object_or_404(Review, id=review_id)
         if review.user != request.user:
@@ -397,7 +492,7 @@ class CreateReviewView(APIView):
         review.delete()
         return APIResponse.success(
             message="Review deleted successfully.",
-            status_code=204
+            status_code=200
         )
         
         
@@ -536,7 +631,13 @@ class DeleteAccountAPIView(APIView):
                 message="Password is incorrect.",
                 status_code=400
             )
-        user.delete()
+            
+        from django.utils import timezone
+
+        user.is_active = False
+        user.save()
+        
+        # user.delete()
         return APIResponse.success(
             message="Account deleted successfully.",
             status_code=200
@@ -625,4 +726,100 @@ class JoinLiveClassView(APIView):
             data={
                 "class_link": live_class.class_link
             }
+        )
+        
+        
+class StudentPurchasedCourseRecordingListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+    def get(self, request):
+        user = request.user
+
+        if user.role != "student":
+            return APIResponse.error(
+                message="Only students can access purchased course recordings.",
+                status_code=403
+            )
+
+        enrolled_course_ids = Enrollment.objects.filter( user=user, is_active=True).values_list("course_id", flat=True)
+        recordings = sessionRecordUploader.objects.select_related("course").filter(course_id__in=enrolled_course_ids).order_by("-uploaded_at")
+        
+        search = request.query_params.get("search")
+        if search:
+            recordings = recordings.filter(title__icontains=search)
+            
+        paginator = self.paginator_class()
+        page = paginator.paginate_queryset(recordings, request, view=self)
+        
+        serializer = LiveRecordingVideo(page, many=True,context={"request": request})
+
+        return  paginator.get_paginated_response(
+            data=serializer.data,
+            message="Purchased course recordings fetched successfully.",
+        )
+        
+    
+    
+
+class StudentRecordingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+
+        if user.role != "student":
+            return APIResponse.error(
+                message="Only students can access recording details.",
+                status_code=403
+            )
+
+        recording = get_object_or_404(
+            sessionRecordUploader.objects.select_related("course"),
+            pk=pk
+        )
+
+        is_enrolled = Enrollment.objects.filter(
+            user=user,
+            course=recording.course,
+            is_active=True
+        ).exists()
+
+        if not is_enrolled:
+            return APIResponse.error(
+                message="You do not have access to this recording.",
+                status_code=403
+            )
+
+        serializer = LiveRecordingVideo(
+            recording,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Recording fetched successfully.",
+            data=serializer.data,
+            status_code=200
+        )
+
+# 🔹 My Certificates List View
+class StudentCertificateListView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        certificates = Certificate.objects.filter(
+            enrollment__user=request.user,
+            enrollment__is_completed=True
+        ).order_by('-issue_date')
+
+        paginator = self.pagination_class()
+        paginated_certificates = paginator.paginate_queryset(certificates, request, view=self)
+
+        serializer = StudentCertificateSerializer(
+            paginated_certificates, many=True, context={'request': request}
+        )
+
+        return paginator.get_paginated_response(
+            data=serializer.data,
+            message="Certificates retrieved successfully."
         )

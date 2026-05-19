@@ -38,6 +38,8 @@ class Student(models.Model):
     )
     
     title = models.CharField(max_length=100, blank=True)
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
     bio = models.TextField(blank=True)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)

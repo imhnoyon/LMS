@@ -4,7 +4,7 @@ from .models import User,OTP
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "email", "role", "is_active","is_verified","is_staff", "created_at")
+    list_display = ("id", "name", "email", "role", "is_active","is_verified","is_staff", "created_at","signature_url")
     search_fields = ("name", "email")
     list_filter = ("role", "is_active", "is_verified")
     
