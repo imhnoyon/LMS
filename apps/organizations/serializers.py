@@ -459,3 +459,13 @@ class InstructorEarningsChartItemSerializer(serializers.Serializer):
     expiry_date = serializers.DateField(allow_null=True)
     status = serializers.CharField()
     
+    
+from .models import ContractUserMessage    
+class ContractUsUserMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContractUserMessage
+        fields = ["id", "name", "email", "subject", "message", "created_at"]
+        read_only_fields = ["id", "created_at"]
+      
+
+    

@@ -1057,10 +1057,21 @@ class CoursesHomeView(APIView):
     
 
 class CourseInformationAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstructorOrOrganization]
 
     def get(self, request):
-        courses = Course.objects.all().order_by('-created_at')
+        courses = Course.objects.all().order_by('-created_at').filter(status="accepted")
+
+        if request.user.role == "Or_admin":
+            organization_ids = Membership.objects.filter(
+                user=request.user,
+                role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                status=Membership.Status.ACTIVE,
+            ).values_list("organization_id", flat=True)
+
+            courses = courses.filter(organization_id__in=organization_ids)
+        else:
+            courses = courses.filter(instructor=request.user)
 
         serializer = courseInformationserializer(
             courses,
@@ -1424,32 +1435,37 @@ class LiveClassManageView(APIView):
     pagination_class = CustomPagination
 
     def post(self, request, course_id):
+        course = get_object_or_404(Course, pk=course_id)
 
-        course = get_object_or_404(
-            Course,
-            Q(pk=course_id) & (
+        has_access = False
 
-                # Direct course instructor
-                Q(instructor=request.user)
+        # Direct course instructor
+        if course.instructor_id == request.user.id:
+            has_access = True
 
-                # Organization admin/manager
-                | Q(
-                    organization__memberships__user=request.user,
-                    organization__memberships__status=Membership.Status.ACTIVE,
-                    organization__memberships__role__in=[
-                        Membership.Role.ADMIN,
-                        Membership.Role.MANAGER,
-                    ]
-                )
+        # Organization admin/manager
+        elif course.organization_id and Membership.objects.filter(
+            organization=course.organization,
+            user=request.user,
+            status=Membership.Status.ACTIVE,
+            role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+        ).exists():
+            has_access = True
 
-                # Organization instructor via contract
-                | Q(
-                    contracts__instructor__user=request.user,
-                    contracts__instructor__status=Membership.Status.ACTIVE,
-                    contracts__instructor__role=Membership.Role.INSTRUCTOR,
-                )
+        # Organization instructor via contract
+        elif Contract.objects.filter(
+            course=course,
+            instructor__user=request.user,
+            instructor__status=Membership.Status.ACTIVE,
+            instructor__role=Membership.Role.INSTRUCTOR,
+        ).exists():
+            has_access = True
+
+        if not has_access:
+            return APIResponse.error(
+                message="Access denied or course not found.",
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-        )
 
         serializer = LiveClassSerializer(data=request.data)
 
@@ -1598,26 +1614,93 @@ class LiveClassOrInstructorDeshboardManageView(APIView):
             many=True,
             context={"request": request}
         ).data
+        # Base response payload
+        response_data = {
+            "total_live_classes": upcoming_live_classes.count() + past_live_classes.count(),
+            "upcoming_live_classes_count": upcoming_live_classes.count(),
+            "past_live_classes_count": past_live_classes.count(),
+            "upcoming_live_classes": upcoming_serialized,
+            "past_live_classes": past_serialized,
+        }
+
+        # Optional: if a specific instructor is selected via query param, compute
+        # course-wise enrolled student counts and total enrolled students for
+        # courses assigned to that instructor via Contract.
+        instructor_id = request.query_params.get("instructor_id")
+
+        if instructor_id:
+            try:
+                instructor_id = int(instructor_id)
+            except (TypeError, ValueError):
+                return APIResponse.error(message="Invalid instructor_id.", status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Courses assigned to the selected instructor via Contract (ongoing)
+            assigned_course_ids_qs = Contract.objects.filter(
+                instructor__user__id=instructor_id,
+                status=Contract.Status.ONGOING,
+            ).values_list("course_id", flat=True).distinct()
+
+            assigned_course_ids = list(assigned_course_ids_qs)
+
+            # Permission: allow if requesting user is the instructor themselves, or
+            # is an admin/manager of at least one organization that the instructor
+            # has a contract with. This preserves existing access patterns.
+            allowed = False
+            if request.user.id == instructor_id:
+                allowed = True
+            else:
+                org_ids = Contract.objects.filter(
+                    instructor__user__id=instructor_id
+                ).values_list("organization_id", flat=True).distinct()
+
+                if Membership.objects.filter(
+                    organization_id__in=org_ids,
+                    user=request.user,
+                    role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                    status=Membership.Status.ACTIVE,
+                ).exists():
+                    allowed = True
+
+            if not allowed:
+                return APIResponse.error(message="Access denied.", status_code=status.HTTP_403_FORBIDDEN)
+
+            # Compute per-course enrolled counts (distinct active users)
+            course_counts = []
+            if assigned_course_ids:
+                # Bulk query: get counts grouped by course_id
+                counts_qs = Enrollment.objects.filter(
+                    course_id__in=assigned_course_ids,
+                    is_active=True,
+                ).values("course_id").annotate(enrolled_count=Count("user", distinct=True))
+
+                counts_map = {row["course_id"]: row["enrolled_count"] for row in counts_qs}
+
+                # Fetch course titles in a single query
+                courses_map = {
+                    c.id: c.title for c in Course.objects.filter(id__in=assigned_course_ids).only("id", "title")
+                }
+
+                for cid in assigned_course_ids:
+                    course_counts.append({
+                        "course_id": cid,
+                        "title": courses_map.get(cid, ""),
+                        "enrolled_students_count": counts_map.get(cid, 0),
+                    })
+
+            # Total unique enrolled students across all assigned courses
+            total_enrolled = Enrollment.objects.filter(
+                course_id__in=assigned_course_ids,
+                is_active=True,
+            ).values("user").distinct().count() if assigned_course_ids else 0
+
+            response_data.update({
+                "course_enrollment_counts": course_counts,
+                "total_enrolled_students": total_enrolled,
+            })
 
         return APIResponse.success(
             message="Live classes retrieved successfully.",
-            data={
-                "total_live_classes":
-                    upcoming_live_classes.count()
-                    + past_live_classes.count(),
-
-                "upcoming_live_classes_count":
-                    upcoming_live_classes.count(),
-
-                "past_live_classes_count":
-                    past_live_classes.count(),
-
-                "upcoming_live_classes":
-                    upcoming_serialized,
-
-                "past_live_classes":
-                    past_serialized,
-            },
+            data=response_data,
             status_code=status.HTTP_200_OK,
         )
         
@@ -1629,11 +1712,49 @@ class LiveClassContractAssignedManageView(APIView):
     def get(self, request):
         now = timezone.now()
 
-        # Find course ids assigned to this user via Contract where contract is ongoing
-        course_ids = Contract.objects.filter(
-            instructor__user=request.user,
-            status=Contract.Status.ONGOING,
-        ).values_list("course_id", flat=True).distinct()
+        # Optional: allow passing `instructor_id` to view data for a selected instructor.
+        # Default to the logged-in instructor.
+        instructor_id = request.query_params.get("instructor_id")
+
+        if instructor_id:
+            try:
+                instructor_id = int(instructor_id)
+            except (TypeError, ValueError):
+                return APIResponse.error(message="Invalid instructor_id.", status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Permission: allow if requesting user is the instructor themselves, or
+            # is an admin/manager of at least one organization that the instructor
+            # has a contract with.
+            allowed = False
+            if request.user.id == instructor_id:
+                allowed = True
+            else:
+                org_ids = Contract.objects.filter(
+                    instructor__user__id=instructor_id
+                ).values_list("organization_id", flat=True).distinct()
+
+                if Membership.objects.filter(
+                    organization_id__in=org_ids,
+                    user=request.user,
+                    role__in=[Membership.Role.ADMIN, Membership.Role.MANAGER],
+                    status=Membership.Status.ACTIVE,
+                ).exists():
+                    allowed = True
+
+            if not allowed:
+                return APIResponse.error(message="Access denied.", status_code=status.HTTP_403_FORBIDDEN)
+
+            # Find course ids assigned to the selected instructor via Contract where contract is ongoing
+            course_ids = Contract.objects.filter(
+                instructor__user__id=instructor_id,
+                status=Contract.Status.ONGOING,
+            ).values_list("course_id", flat=True).distinct()
+        else:
+            # Find course ids assigned to this user via Contract where contract is ongoing
+            course_ids = Contract.objects.filter(
+                instructor__user=request.user,
+                status=Contract.Status.ONGOING,
+            ).values_list("course_id", flat=True).distinct()
 
         live_qs = LiveClass.objects.filter(course_id__in=course_ids)
 
@@ -1659,15 +1780,50 @@ class LiveClassContractAssignedManageView(APIView):
             context={"request": request}
         ).data
 
+        # Base response
+        response_data = {
+            "total_live_classes": upcoming_live_classes.count() + past_live_classes.count(),
+            "upcoming_live_classes_count": upcoming_live_classes.count(),
+            "past_live_classes_count": past_live_classes.count(),
+            "upcoming_live_classes": upcoming_serialized,
+            "past_live_classes": past_serialized,
+        }
+
+        # If we have course_ids (for selected instructor or logged-in instructor),
+        # compute enrollment stats (per-course and total unique students).
+        assigned_course_ids = list(course_ids)
+        if assigned_course_ids:
+            counts_qs = Enrollment.objects.filter(
+                course_id__in=assigned_course_ids,
+                is_active=True,
+            ).values("course_id").annotate(enrolled_count=Count("user", distinct=True))
+
+            counts_map = {row["course_id"]: row["enrolled_count"] for row in counts_qs}
+
+            courses_map = {c.id: c.title for c in Course.objects.filter(id__in=assigned_course_ids).only("id", "title")}
+
+            course_counts = [
+                {
+                    "course_id": cid,
+                    "title": courses_map.get(cid, ""),
+                    "enrolled_students_count": counts_map.get(cid, 0),
+                }
+                for cid in assigned_course_ids
+            ]
+
+            total_enrolled = Enrollment.objects.filter(
+                course_id__in=assigned_course_ids,
+                is_active=True,
+            ).values("user").distinct().count()
+
+            response_data.update({
+                "course_enrollment_counts": course_counts,
+                "total_enrolled_students": total_enrolled,
+            })
+
         return APIResponse.success(
             message="Contract-assigned live classes retrieved successfully.",
-            data={
-                "total_live_classes": upcoming_live_classes.count() + past_live_classes.count(),
-                "upcoming_live_classes_count": upcoming_live_classes.count(),
-                "past_live_classes_count": past_live_classes.count(),
-                "upcoming_live_classes": upcoming_serialized,
-                "past_live_classes": past_serialized,
-            },
+            data=response_data,
             status_code=status.HTTP_200_OK,
         )
         

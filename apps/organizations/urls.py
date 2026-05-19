@@ -66,6 +66,7 @@ urlpatterns = [
     
     
     # path("earnings/summary/", EarningsChartSerializer.as_view(), name="earnings-summary"),
-    
+    path("sent/messages/contractus/", ContractUserMessageSendAPIView.as_view(), name="sent-messages"),
+    path("contact-us/messages/<int:message_id>/", ContractUsMessageDetailsAPIView.as_view(), name="contact-us-messages"),
 
 ]

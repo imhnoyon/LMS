@@ -1467,4 +1467,65 @@ class InstructorEarningsChartAPIView(APIView):
         )
         
         
+
+
+# View for sending message       
+class ContractUserMessageSendAPIView(APIView):
+    paginator_class = CustomPagination
+
+    def post(self, request):
+        serializer = ContractUsUserMessageSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            contract_message = serializer.save()
+            response_serializer = ContractUsUserMessageSerializer(contract_message)
+
+            return APIResponse.success(
+                message="Message sent successfully.",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+
+        return APIResponse.error(
+            message="Failed to send message.",
+            data=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+    def get(self, request):
+
+        messages = ContractUserMessage.objects.all().order_by("-created_at")
+        paginator=self.paginator_class()
+        paginated_messages=paginator.paginate_queryset(messages,request,view=self)
+        serializer = ContractUsUserMessageSerializer(
+            paginated_messages,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(
+            data=serializer.data,
+            message="Messages retrieved successfully."
+        )
+    
+        
+        
+class ContractUsMessageDetailsAPIView(APIView):
+
+    def get(self, request, message_id):
+        try:
+            message = ContractUserMessage.objects.get(id=message_id)
+        except ContractUserMessage.DoesNotExist:
+            return APIResponse.error(
+                message="Message not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ContractUsUserMessageSerializer(message, context={"request": request})
+
+        return APIResponse.success(
+            message="Message details retrieved successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+  
         
