@@ -5,6 +5,7 @@ from apps.analytics import views
 # Analytics app URLs
 urlpatterns = [
 	path("ai/chat/", views.CourseAssistantChatAPIView.as_view(), name="analytics-ai-chat"),
+ 
 	path("ai/chat/<int:conversation_id>/", views.CourseAssistantChatAPIView.as_view(), name="analytics-ai-chat"),
 	path("ai/course-structure/", views.CourseStructureAPIView.as_view(), name="analytics-ai-course-structure"),
 	path("ai/lesson-draft/", views.LessonDraftAPIView.as_view(), name="analytics-ai-lesson-draft"),
