@@ -1,365 +1,471 @@
-# EduHub API
+# From-Cert API
 
-A comprehensive Django REST Framework backend for an online learning management system. EduHub provides a scalable, feature-rich platform for instructors to create and manage courses, handle payments, and track student progress.
+From-Cert API is a modular Django REST Framework backend for a learning platform with course management, payments, live classes, organization workflows, affiliate tracking, real-time messaging, and AI-assisted content creation.
 
-## 🚀 Features
+## Overview
 
-### Core Learning Platform
-- **Course Management** - Create, publish, and manage courses with detailed structure
-- **Instructor Dashboard** - Complete control over courses, earnings, and student engagement
-- **Student Enrollment** - Flexible enrollment system with progress tracking
-- **Live Classes** - Schedule and conduct live sessions via Google Meet or Zoom
-- **Certificates** - Auto-generate certificates for course completion
+The backend is split into domain-focused apps. Each app owns its own URL group under `/api/v1/`, which keeps the API surface predictable and easy to maintain. The system supports:
 
-### Content Management
-- **Lecture System** - Upload videos, attachments, and lecture notes
-- **Quiz & Assessments** - Create quizzes with multiple question types
-- **Sections & Structure** - Organize courses into logical sections
-- **Course Reviews** - Student ratings and feedback system
+- Admin workflows for approvals, moderation, analytics, contacts, FAQs, and user control.
+- Instructor workflows for course authoring, live classes, earnings, certificates, and profiles.
+- Student workflows for enrollment, course consumption, quizzes, reviews, certificates, and purchase history.
+- Organization and affiliate workflows for contracts, referrals, revenue, and partner management.
+- Messaging and notifications for platform communication.
+- AI-powered tools for course structure, lesson drafting, quiz generation, content improvement, and learning objectives.
 
-### Payments & Revenue
-- **Stripe Integration** - Secure payment processing
-- **Commission Management** - Track instructor earnings and withdrawals
-- **Invoice System** - Automated invoice generation for orders
-- **Financial Analytics** - Revenue charts and earnings reports
+## Platform Features
 
-### Communication & Engagement
-- **Real-time Messaging** - WebSocket-based instructor-student messaging
-- **Notifications** - Email and in-app notifications
-- **Student Analytics** - Track enrollments, completions, and engagement metrics
+- JWT-based authentication and password recovery.
+- Custom user model with role-based access patterns.
+- Course creation with categories, basic information, advanced metadata, sections, lectures, quizzes, and publishing.
+- Student course player with lecture completion tracking and quiz submissions.
+- Certificate generation tied to course completion.
+- Stripe checkout, webhook handling, connect accounts, dashboard links, and withdrawal requests.
+- Organization onboarding, invitations, contracts, analytics, and earnings dashboards.
+- Affiliate referral links, click tracking, wallet, and commission management.
+- Real-time conversation messaging over Django Channels.
+- Admin configuration for contact submissions, FAQs, and site settings.
+- Debug-only Swagger and ReDoc documentation.
 
-### Organization Features
-- **Multi-level Accounts** - Support for individual and organization instructors
-- **Team Management** - Organization membership and role management
-- **Affiliate System** - Commission tracking and affiliate management
+## Tech Stack
 
-### Administrative
-- **Instructor Approval Workflow** - Review and approve instructor applications
-- **User Management** - Role-based access control (Admin, Instructor, Student)
-- **Content Moderation** - Manage course status and featured content
+- Django
+- Django REST Framework
+- Django Channels
+- Daphne
+- drf-yasg
+- `rest_framework_simplejwt`
+- `corsheaders`
+- Stripe
 
-## 🛠 Tech Stack
+## Project Layout
 
-### Backend
-- **Django 3.2+** - Python web framework
-- **Django REST Framework** - RESTful API development
-- **PostgreSQL/SQLite** - Database
-- **Celery** - Asynchronous task queue
-- **Redis** - Caching and real-time features
-
-### Payment & Integration
-- **Stripe** - Payment processing
-- **Django-Cors-Headers** - CORS handling
-- **Python-Decouple** - Environment configuration
-
-### Real-time Communication
-- **Django Channels** - WebSocket support for messaging
-- **Daphne** - ASGI server
-
-### Email & Notifications
-- **Django-Email** - Email handling
-- **Custom Email Templates** - Branded email communications
-
-## 📋 Prerequisites
-
-- Python 3.8+
-- PostgreSQL (or SQLite for development)
-- Redis (for caching and real-time features)
-- Stripe account (for payment processing)
-
-## 🔧 Installation
-
-### 1. Clone the repository
-```bash
-git clone <repository-url>
-cd backend
+```text
+backend/
+├── apps/
+│   ├── affiliates/      # Affiliate commissions, referral links, wallets
+│   ├── analytics/       # AI course helper endpoints
+│   ├── core/            # Contact forms, FAQs, site config
+│   ├── courses/         # Course authoring, curriculum, live classes
+│   ├── enrollments/     # Enrollment and certificate domain logic
+│   ├── instructors/     # Instructor dashboard, approvals, earnings
+│   ├── messaging/       # Conversations, messages, websocket routing
+│   ├── notifications/   # Notification APIs
+│   ├── orders/          # Cart, checkout, wishlist
+│   ├── organizations/   # Organization dashboards, contracts, analytics
+│   ├── payments/        # Stripe checkout, connect, withdrawals
+│   ├── students/        # Student dashboard, reviews, certificates
+│   └── users/           # Authentication and admin user tools
+├── config/              # Settings, URL routing, ASGI/WSGI
+├── LearnHub_AI/         # Optional Streamlit AI teaching assistant
+├── media/               # Uploaded assets
+├── static/              # Static assets
+├── templates/           # HTML templates and email templates
+├── utils/               # Shared helper utilities
+└── manage.py
 ```
 
-### 2. Create and activate virtual environment
+## API Architecture
+
+All backend REST APIs are mounted under `/api/v1/`:
+
+- `/api/v1/core/`
+- `/api/v1/users/`
+- `/api/v1/courses/`
+- `/api/v1/affiliates/`
+- `/api/v1/analytics/`
+- `/api/v1/payments/`
+- `/api/v1/notifications/`
+- `/api/v1/enrollments/`
+- `/api/v1/orders/`
+- `/api/v1/messaging/`
+- `/api/v1/instructors/`
+- `/api/v1/organizations/`
+- `/api/v1/students/`
+
+Documentation and realtime endpoints:
+
+- `/swagger/`
+- `/redoc/`
+- `/swagger.json`
+- `/ws/messaging/conversations/<conversation_id>/`
+
+## API Reference
+
+### Core Module
+
+Base path: `/api/v1/core/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/contact/` | List contact messages |
+| POST | `/contact/submit/` | Submit contact form |
+| GET | `/contact/<pk>/` | Contact detail |
+| PATCH/PUT | `/contact/<pk>/status/` | Update contact status |
+| GET | `/faq/categories/` | List FAQ categories |
+| POST | `/faq/categories/create/` | Create FAQ category |
+| GET | `/faq/categories/<pk>/` | FAQ category detail |
+| GET | `/faq/` | List FAQs |
+| POST | `/faq/create/` | Create FAQ |
+| GET | `/faq/<pk>/` | FAQ detail |
+| GET | `/site-config/` | Get site config |
+| POST | `/site-config/create/` | Create site config |
+| PATCH/PUT | `/site-config/update/` | Update site config |
+
+### Users Module
+
+Base path: `/api/v1/users/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/register/` | Register user |
+| POST | `/verify-email/` | Verify email |
+| POST | `/login/` | Sign in |
+| POST | `/resend-verification/` | Resend verification code |
+| POST | `/forgot-password/` | Start password reset |
+| POST | `/verify-reset-code/` | Verify reset code |
+| POST | `/reset-password/` | Reset password |
+| POST | `/refresh-token/` | Refresh JWT token |
+| GET | `/users/` | Admin user list |
+| GET | `/users/<uuid:pk>/` | Admin user detail |
+| POST | `/send-email/` | Send email |
+| PATCH/PUT | `/block/<uuid:pk>/` | Block or unblock user |
+| GET | `/admin/dashboard-data/` | Admin dashboard data |
+| GET | `/admin/payments/` | Admin payments dashboard |
+| GET | `/admin/analytics/` | Admin analytics data |
+| PATCH/PUT | `/admin/profile/update/` | Update admin profile |
+
+### Courses Module
+
+Base path: `/api/v1/courses/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET/POST | `/categories/` | Manage categories |
+| GET | `/courses-list/` | Course list |
+| GET | `/courses-lists/` | Alternate course list |
+| GET | `/courses-list/<pk>/` | Course detail |
+| GET | `/coursesAdmin/review-history/` | Admin review history |
+| PATCH/PUT | `/course-block-unblock/<pk>/` | Block or unblock course |
+| GET | `/courses-list-instructor/` | Instructor course list |
+| POST | `/courses/` | Create course basic info |
+| GET/PUT/PATCH | `/courses/<pk>/` | Read or update course basic info |
+| PATCH/PUT | `/courses/advance-info/<pk>/` | Update advanced info |
+| GET/POST | `/courses/sections/<pk>/` | Course sections |
+| GET/POST | `/courses/<pk>/sections/<section_id>/` | Specific section |
+| GET/POST | `/sections/lectures/<section_id>/` | Lectures in a section |
+| GET/POST | `/sections/lectures/<section_id>/<lecture_id>/` | Specific lecture |
+| GET/POST | `/sections/quizzes/<section_id>/` | Quizzes in a section |
+| GET/POST | `/sections/quizzes/<section_id>/<quiz_id>/` | Specific quiz |
+| POST | `/courses/publish/<pk>/` | Publish course |
+| GET | `/courses/<course_id>/overview/` | Course overview |
+| GET | `/live-classes/stats/` | Live class stats |
+| GET/POST/PATCH | `/live-classes/<course_id>/` | Manage live classes |
+| POST | `/joint-class/<id>/` | Mark attendance |
+| GET | `/home/courses/` | Student home courses |
+| GET | `/home/courses/list/` | Alternate student home list |
+| GET | `/course/info/` | Course info |
+| GET/POST | `/lectures/comments/` | Lecture comments |
+| GET/POST | `/lectures/comments/<lecture_id>/` | Lecture comments by lecture |
+| GET | `/my-courses/<pk>/` | Instructor course details |
+| GET | `/courses/<course_id>/sections/` | Sections by course |
+| GET | `/organizations/courses/reviews/` | Organization course reviews |
+| GET/POST/PATCH | `/courses/<course_id>/live-classes/` | Live classes for a course |
+| GET/POST/PATCH | `/live-classes/deshboard/` | Contract-assigned live classes |
+
+### Affiliates Module
+
+Base path: `/api/v1/affiliates/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/affiliates/` | Affiliate list |
+| PATCH/PUT | `/affiliates/status/<pk>/` | Update affiliate status |
+| DELETE | `/delete-affiliate/<pk>/` | Delete affiliate |
+| GET | `/affiliate/courses/` | Affiliate course list |
+| POST | `/generate-course-referral-link/<course_id>/` | Generate referral link |
+| POST | `/track-referral-click/` | Track referral click |
+| GET | `/affiliate/dashboard/` | Affiliate dashboard |
+| GET | `/affiliate/main-dashboard/` | Main affiliate dashboard |
+| GET | `/affiliate/wallet/` | Affiliate wallet |
+| GET | `/affiliate/withdrawal-requests-list/` | Withdrawal requests |
+| GET | `/affiliate/profile/` | Affiliate profile |
+| GET | `/affiliate/overview/` | Affiliate overview |
+| PATCH/PUT | `/affiliate/block/<pk>/` | Block affiliate |
+| PATCH/PUT | `/affiliate/update-commission/<pk>/` | Update commission rate |
+| GET | `/affiliate/details/<pk>/` | Affiliate details |
+
+### Analytics Module
+
+Base path: `/api/v1/analytics/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/ai/chat/` | AI assistant chat |
+| POST | `/ai/chat/<conversation_id>/` | Continue AI conversation |
+| POST | `/ai/course-structure/` | Generate course structure |
+| POST | `/ai/lesson-draft/` | Generate lesson draft |
+| POST | `/ai/quiz-questions/` | Generate quiz questions |
+| POST | `/ai/improve-content/` | Improve content |
+| POST | `/ai/learning-objectives/` | Generate learning objectives |
+| GET | `/ai/courses/` | List AI-related courses |
+
+### Payments Module
+
+Base path: `/api/v1/payments/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/stripe/checkout/<order_id>/` | Create Stripe checkout session |
+| POST | `/stripe/webhook/` | Stripe webhook handler |
+| GET | `/stripe/success/` | Payment success page |
+| GET | `/stripe/cancel/` | Payment cancel page |
+| POST | `/stripe/connect/` | Create instructor Stripe Connect account |
+| GET | `/stripe/dashboard-link/` | Stripe dashboard login link |
+| POST | `/withdraw/request/` | Request instructor withdrawal |
+| PATCH/PUT | `/withdraw/approve/<withdraw_id>/` | Approve withdrawal |
+| POST | `/instructor/withdraw/cancel/<withdraw_id>/` | Cancel instructor withdrawal |
+| POST | `/affiliate/stripe/connect/` | Create affiliate Stripe Connect account |
+| GET | `/affiliate/stripe/dashboard-link/` | Affiliate dashboard login link |
+| POST | `/affiliate/withdraw/request/` | Request affiliate withdrawal |
+| POST | `/organization/stripe/connect/` | Create organization Stripe Connect account |
+| GET | `/organization/stripe/dashboard-link/` | Organization dashboard login link |
+| POST | `/organization/withdraw/request/` | Request organization withdrawal |
+| GET | `/stripe/return-page/` | Stripe return page |
+
+### Notifications Module
+
+Base path: `/api/v1/notifications/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/notifications/` | Notification list |
+| GET | `/notifications/<pk>/` | Notification detail |
+
+### Enrollments Module
+
+Base path: `/api/v1/enrollments/`
+
+This app currently holds enrollment domain logic and certificate generation models. Its public URL file is reserved for future API expansion.
+
+### Orders Module
+
+Base path: `/api/v1/orders/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/cart/add/` | Add item to cart |
+| GET | `/cart-view/` | View cart |
+| DELETE | `/cart-remove/<item_id>/` | Remove cart item |
+| POST | `/cart/checkout/` | Create order from cart |
+| POST | `/wishlist/add/<course_id>/` | Add to wishlist |
+| GET | `/wishlist/` | View wishlist |
+| GET | `/wishlist/<course_id>/` | Wishlist lookup |
+
+### Messaging Module
+
+Base path: `/api/v1/messaging/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET/POST | `/conversations/` | List or create conversations |
+| GET/POST | `/conversations/<conversation_id>/messages/` | Messages in a conversation |
+
+Websocket route:
+
+| Protocol | Endpoint | Description |
+| --- | --- | --- |
+| WS | `/ws/messaging/conversations/<conversation_id>/` | Real-time conversation stream |
+
+### Instructors Module
+
+Base path: `/api/v1/instructors/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/pending-instructors/` | Pending instructor applications |
+| POST/PATCH | `/approve-instructor/<pk>/` | Approve instructor |
+| POST/PATCH | `/feature-instructor/<pk>/` | Feature instructor |
+| DELETE | `/delete-instructor/<pk>/` | Delete instructor |
+| GET | `/withdrawals/` | Withdrawal requests |
+| GET | `/instructors-list-admin/` | Instructor list for admin |
+| GET | `/instructors-details/<pk>/` | Instructor detail for admin |
+| GET | `/instructor-list-shown-by-admin/` | Admin-facing instructor list |
+| GET | `/courses/` | Instructor course list |
+| GET/PUT/PATCH | `/profile/` | Update instructor profile |
+| GET | `/dashboard/` | Instructor dashboard |
+| GET | `/earnings/` | Instructor earnings |
+| GET | `/certificates-list/` | Certificates issued for instructor courses |
+| POST | `/live-session/upload/<course_id>/` | Upload live session recording |
+| POST | `/upload-signature/` | Upload signature image |
+| GET | `/get-signature/` | Fetch instructor signature |
+| GET | `/instructor/me/` | Current instructor profile |
+
+### Organizations Module
+
+Base path: `/api/v1/organizations/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/unverified-organizations/` | List unverified organizations |
+| POST/PATCH | `/approve-organization/<pk>/` | Approve organization |
+| POST/PATCH | `/reject-organization/<pk>/` | Reject organization |
+| POST | `/invite/` | Invite instructor |
+| GET | `/invitation/<token>/` | Invitation detail |
+| POST | `/invitation/respond/<token>/` | Respond to invitation |
+| GET | `/organization/instructors/dashboard/` | Organization instructor dashboard |
+| GET | `/instructors/live-classes/` | Organization instructor live class stats |
+| GET/POST/PATCH | `/live-classes/<course_id>/` | Manage organization live classes |
+| POST | `/courses/<course_id>/live-session/upload/` | Upload live session recording |
+| GET | `/my-courses/` | Organization courses |
+| GET | `/organization-deshboard/` | Organization dashboard |
+| GET | `/organization-earnings/dashboard/` | Organization earnings dashboard |
+| GET | `/organization-instructors-contracts/` | Organization instructors/contracts |
+| GET | `/my-organization-courses/` | Organization-owned courses |
+| GET/POST | `/contracts-instructors/` | Create/list contracts |
+| GET/PUT/PATCH/DELETE | `/contracts-instructors/<contract_id>/` | Contract detail |
+| GET | `/organization-contracts-details/<contract_id>/` | Contract detail summary |
+| GET | `/members-analytics/` | Member analytics |
+| GET/POST/PATCH | `/organization-profile/` | Organization profile update |
+| GET | `/dashboard-statistics/` | Analytics overview |
+| GET | `/revenue-trends/` | Revenue trends |
+| GET | `/daily-revenue/` | Daily revenue chart |
+| GET | `/course-analytics/` | Course analytics |
+| GET | `/top-courses/` | Top courses |
+| GET | `/recent-activity/` | Recent activity feed |
+| GET | `/ratings-breakdown/` | Ratings breakdown |
+| GET | `/comprehensive-report/` | Comprehensive report |
+| GET | `/admin/organizations/` | Admin organization list |
+| GET | `/admin/organizations/<pk>/` | Admin organization detail |
+| GET | `/organization/earnings/` | Organization earnings |
+| PATCH/PUT | `/membership/toggle/<pk>/` | Toggle membership status |
+| GET/POST/PATCH | `/organization/profile/` | Organization profile API |
+| GET | `/instructor/organizations/` | Instructor organizations |
+| GET | `/instructor/contracts/courses/` | Instructor contract course list |
+| GET | `/instructor/contracts/categories/` | Instructor contract category list |
+| GET | `/instructor/earnings/chart/` | Instructor earnings chart |
+| POST | `/sent/messages/contractus/` | Send contract-us message |
+| GET | `/contact-us/messages/<message_id>/` | Contract-us message detail |
+
+### Students Module
+
+Base path: `/api/v1/students/`
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/dashboard/` | Student dashboard |
+| GET | `/courses/<course_id>/player/` | Course player |
+| GET | `/courses/<course_id>/player/<lecture_id>/` | Course player with lecture |
+| POST | `/lectures/<lecture_id>/complete/` | Complete lecture |
+| GET | `/quizzes/<quiz_id>/` | Start quiz |
+| POST | `/quizzes/<quiz_id>/submit/` | Submit quiz |
+| PATCH/PUT | `/profile/` | Update student profile |
+| POST | `/enroll-courses/` | Enroll in course |
+| POST | `/exam-assessments-courses/` | Exam assessment flow |
+| GET/POST | `/lecture-tracking/` | Lecture progress tracking |
+| GET | `/course-completed/<course_id>/` | Check course completion |
+| POST | `/reviews/<course_id>/` | Create review |
+| PATCH/PUT | `/reviews-updated/<review_id>/` | Update review |
+| DELETE | `/reviews-deleted/<review_id>/` | Delete review |
+| GET | `/review-list/` | Review list |
+| GET | `/quiz-attempts-list/` | Quiz attempt history |
+| GET | `/student/purchase-history/` | Purchase history |
+| POST | `/password-reset/` | Change password |
+| DELETE | `/delete-account/` | Delete account |
+| GET | `/student/live-classes/upcoming/` | Upcoming live classes |
+| POST | `/joint-live-class/<live_class_id>/` | Join live class |
+| GET | `/student/recordings/` | Purchased recordings |
+| GET | `/student/recordings/<pk>/` | Recording detail |
+| GET | `/student/certificates/` | Student certificates |
+
+## Workflow Summary
+
+1. A user registers or logs in through the users module.
+2. Admins approve instructors and organizations when required.
+3. Instructors build courses, add sections, lectures, and quizzes, then publish content.
+4. Students enroll, consume lessons, complete quizzes, and generate certificates on completion.
+5. Orders are created from carts, then paid through Stripe checkout.
+6. Withdrawals, earnings, affiliate referrals, and organization revenue are handled in their respective modules.
+7. Messaging, notifications, and AI tools support the day-to-day learning and content workflow.
+
+## Authentication And Permissions
+
+- The project uses a custom user model configured through `AUTH_USER_MODEL`.
+- JWT refresh is exposed at `/api/v1/users/refresh-token/`.
+- Admin-only APIs are concentrated in users, instructors, organizations, core, and moderation endpoints.
+- Role-aware endpoints are separated by module so the frontend can map behavior cleanly.
+
+## Local Setup
+
+### Requirements
+
+- Python 3.8 or later
+- Virtual environment
+- Stripe keys for payments
+- `.env` configuration for secrets
+
+### Install And Run
+
 ```bash
 python -m venv venv
-
-# On Windows
 venv\Scripts\activate
-
-# On macOS/Linux
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-```bash
 pip install -r requirements.txt
-```
-
-### 4. Configure environment variables
-Create a `.env` file in the project root:
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-DATABASE_URL=postgresql://user:password@localhost:5432/eduhub
-STRIPE_SECRET_KEY=sk_test_xxxxx
-STRIPE_PUBLIC_KEY=pk_test_xxxxx
-REDIS_URL=redis://localhost:6379/0
-EMAIL_HOST_PASSWORD=your-email-password
-```
-
-### 5. Run migrations
-```bash
 python manage.py migrate
-```
-
-### 6. Create superuser
-```bash
 python manage.py createsuperuser
-```
-
-### 7. Collect static files
-```bash
-python manage.py collectstatic --noinput
-```
-
-### 8. Run development server
-```bash
 python manage.py runserver
 ```
 
-The API will be available at `http://localhost:8000/`
+### Environment Variables
 
-## 📁 Project Structure
-
-```
-backend/
-├── apps/
-│   ├── affiliates/           # Affiliate management
-│   ├── analytics/            # Analytics and reporting
-│   ├── core/                 # Core functionality
-│   ├── courses/              # Course management
-│   ├── enrollments/          # Student enrollments
-│   ├── instructors/          # Instructor profiles
-│   ├── messaging/            # Real-time messaging
-│   ├── notifications/        # Notification system
-│   ├── orders/               # Order management
-│   ├── organizations/        # Organization features
-│   ├── payments/             # Payment processing
-│   ├── students/             # Student profiles
-│   └── users/                # User authentication
-├── config/                   # Django settings
-├── media/                    # User uploads
-├── static/                   # Static assets
-├── templates/                # Email templates
-├── utils/                    # Utility functions
-├── manage.py                 # Django management
-└── requirements.txt          # Python dependencies
-```
-
-## 🔌 API Endpoints Overview
-
-### Authentication
-- `POST /api/v1/auth/register/` - User registration
-- `POST /api/v1/auth/login/` - User login
-- `POST /api/v1/auth/logout/` - User logout
-- `POST /api/v1/auth/refresh/` - Refresh token
-
-### Instructors
-- `GET /api/v1/instructors/instructor/me/` - Get current instructor profile
-- `PATCH /api/v1/instructors/instructor/me/` - Update instructor profile
-- `GET /api/v1/instructors/pending/` - List pending instructor approvals (Admin)
-- `PATCH /api/v1/instructors/{id}/approve/` - Approve instructor (Admin)
-
-### Courses
-- `GET /api/v1/courses/` - List courses
-- `POST /api/v1/courses/` - Create course
-- `GET /api/v1/courses/{id}/` - Get course details
-- `PUT /api/v1/courses/{id}/` - Update course
-- `DELETE /api/v1/courses/{id}/` - Delete course
-
-### Enrollments
-- `GET /api/v1/enrollments/` - List student enrollments
-- `POST /api/v1/enrollments/` - Enroll in course
-- `GET /api/v1/enrollments/{id}/progress/` - Get enrollment progress
-
-### Payments
-- `POST /api/v1/payments/process/` - Process payment
-- `GET /api/v1/payments/invoices/` - List invoices
-- `GET /api/v1/earnings/` - Get instructor earnings
-
-### Messaging
-- `GET /api/v1/messages/` - List messages
-- `POST /api/v1/messages/` - Send message
-- WebSocket: `ws://localhost:8000/ws/messages/{room_name}/` - Real-time messaging
-
-## ⚙️ Configuration
-
-### Database Setup
-```bash
-# PostgreSQL (Recommended for production)
-DATABASE_URL=postgresql://user:password@localhost:5432/eduhub
-
-# SQLite (Development only)
-DATABASE_URL=sqlite:///db.sqlite3
-```
-
-### Stripe Configuration
-1. Get API keys from [Stripe Dashboard](https://dashboard.stripe.com/)
-2. Add to `.env`:
 ```env
+DEBUG=True
+SECRET_KEY=your-secret-key
+ALLOWED_HOSTS=localhost,127.0.0.1
+DATABASE_URL=sqlite:///db.sqlite3
 STRIPE_SECRET_KEY=sk_test_xxxxx
 STRIPE_PUBLIC_KEY=pk_test_xxxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxxx
+EMAIL_HOST_PASSWORD=your-email-password
 ```
 
-### Email Configuration
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-EMAIL_USE_TLS=True
-```
+## API Documentation
 
-### Redis Configuration
-```env
-REDIS_URL=redis://localhost:6379/0
-CACHE_TIMEOUT=300
-```
+If `DEBUG=True`, the project serves:
 
-## 🚀 Deployment
+- Swagger UI at `/swagger/`
+- ReDoc at `/redoc/`
+- OpenAPI schema at `/swagger.json`
 
-### Using Gunicorn
-```bash
-pip install gunicorn
-gunicorn config.wsgi:application --bind 0.0.0.0:8000
-```
+## Optional AI Companion App
 
-### Using Docker
-```bash
-docker build -t eduhub-api .
-docker run -p 8000:8000 eduhub-api
-```
+The repository also includes `LearnHub_AI/`, a Streamlit-based AI teaching assistant. It is designed to sit alongside the backend and help instructors with:
 
-### Environment for Production
-```env
-DEBUG=False
-ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-SECURE_SSL_REDIRECT=True
-SESSION_COOKIE_SECURE=True
-CSRF_COOKIE_SECURE=True
-```
+- AI chat about a selected course
+- Suggested course structure
+- Lesson draft generation
+- Quiz question generation
+- Content improvement suggestions
+- Learning objective generation
 
-## 📊 API Response Format
-
-### Success Response
-```json
-{
-  "success": true,
-  "message": "Operation successful",
-  "data": {
-    "id": 1,
-    "name": "Example"
-  }
-}
-```
-
-### Error Response
-```json
-{
-  "success": false,
-  "message": "Error message",
-  "errors": {
-    "field_name": ["Error detail"]
-  }
-}
-```
-
-## 🔐 Authentication
-
-The API uses JWT (JSON Web Tokens) for authentication:
+It can run independently with:
 
 ```bash
-# Get token
-curl -X POST http://localhost:8000/api/v1/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password"}'
-
-# Use token in requests
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8000/api/v1/instructors/instructor/me/
+cd LearnHub_AI
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-## 📝 API Documentation
+The app reads course data from the Django backend and can also run with dummy data for local testing.
 
-Interactive API documentation is available at:
-- **Swagger UI**: `http://localhost:8000/api/schema/swagger/`
-- **ReDoc**: `http://localhost:8000/api/schema/redoc/`
+## Deployment Notes
 
-## 🤝 Contributing
+- Set `DEBUG=False` in production.
+- Configure secure hosts, cookies, and CSRF settings.
+- Serve the app behind a production ASGI server.
+- Ensure Stripe webhooks and websocket routing are enabled in the deployment environment.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## License
 
-### Coding Standards
-- Follow PEP 8 conventions
-- Write meaningful commit messages
-- Add docstrings to functions and classes
-- Create tests for new features
-
-## 🐛 Troubleshooting
-
-### Database Connection Error
-```bash
-# Check PostgreSQL is running
-psql -U postgres
-
-# Reset migrations (development only)
-python manage.py migrate zero
-python manage.py migrate
-```
-
-### Static Files Not Loading
-```bash
-python manage.py collectstatic --clear --noinput
-```
-
-### Redis Connection Error
-```bash
-# Verify Redis is running
-redis-cli ping
-```
-
-### Stripe Integration Issues
-- Verify API keys in `.env`
-- Check webhook endpoint in Stripe Dashboard
-- Review Stripe API logs for detailed errors
-
-## 📞 Support
-
-For support, email: mahedi.dev2002@gmail.com or open an issue on GitHub.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Django and Django REST Framework communities
-- Stripe for payment processing
-- All contributors and users
-
-## 📈 Roadmap
-
-- [ ] Mobile app integration
-- [ ] Advanced analytics dashboard
-- [ ] AI-powered course recommendations
-- [ ] Gamification features
-- [ ] Certificate blockchain verification
-- [ ] Multi-language support
-- [ ] Advanced video player with adaptive bitrate streaming
-
----
-
-**Last Updated**: May 2026
+Add a project license here before publishing the repository publicly.
 
 
