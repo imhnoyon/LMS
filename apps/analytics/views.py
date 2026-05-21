@@ -50,6 +50,17 @@ def _can_access_course(user, course: Course) -> bool:
     if user.is_superuser or getattr(user, "role", None) == "owner":
         return True
 
+    if getattr(user, "role", None) == "student":
+        if Enrollment.objects.filter(user=user, course=course, is_active=True).exists():
+            return True
+
+        if OrderItem.objects.filter(
+            order__user=user,
+            order__status="paid",
+            course=course,
+        ).exists():
+            return True
+
     if course.instructor_id == user.id:
         return True
 
