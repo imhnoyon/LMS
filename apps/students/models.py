@@ -6,6 +6,7 @@ import string
 import uuid
 
 
+
 # Create your models here.
 def generate_student_id():
     max_attempts = 10

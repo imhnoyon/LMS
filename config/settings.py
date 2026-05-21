@@ -49,7 +49,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
-    
+    'cloudinary',
+    'cloudinary_storage',
     
 
     # Local apps
@@ -120,13 +121,25 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # --------------------------------------------------
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
+#         'NAME': BASE_DIR / os.getenv("DB_NAME", "db.sqlite3"),
+#         'OPTIONS': {
+#             'timeout': 20, # Higher timeout for SQLite to avoid locking issues
+#         }
+#     }
+# }
+
+
 DATABASES = {
     'default': {
         'ENGINE': os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
-        'NAME': BASE_DIR / os.getenv("DB_NAME", "db.sqlite3"),
-        'OPTIONS': {
-            'timeout': 20, # Higher timeout for SQLite to avoid locking issues
-        }
+        'NAME': os.getenv("DB_NAME", BASE_DIR / 'db.sqlite3'),
+        'USER': os.getenv("DB_USER", "db_user"),
+        'PASSWORD': os.getenv("DB_PASSWORD", "db_password"),
+        'HOST': os.getenv("DB_HOST", "localhost"),
+        'PORT': os.getenv("DB_PORT", "5432"),
     }
 }
 
@@ -299,3 +312,18 @@ CHANNEL_LAYERS = {
 #     "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
 #   }
 # }
+
+
+
+
+# Cloudinary settings for media storage
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': 'your_cloud_name',
+    'API_KEY': 'your_api_key',
+    'API_SECRET': 'your_api_secret',
+}
+
+
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+

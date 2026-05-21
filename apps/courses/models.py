@@ -5,7 +5,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import Avg
 from datetime import timedelta
 from django.utils import timezone
-
+from cloudinary.models import CloudinaryField
 
 class Category(models.Model):
     name        = models.CharField(max_length=100, unique=True)
@@ -137,7 +137,9 @@ class Course(models.Model):
 class CourseAdvanceInfo(models.Model):
     course        = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='advance_info')
     thumbnail     = models.ImageField(upload_to='course/thumbnails/', null=True, blank=True)
+    # thumbnail= CloudinaryField('course_thumbnails', null=True, blank=True)
     trailer_video = models.FileField(upload_to='course/trailers/', null=True, blank=True)
+    # trailer_video= CloudinaryField('course_trailers', null=True, blank=True)
     description   = models.TextField(blank=True)
 
     def __str__(self):
@@ -180,8 +182,11 @@ class Lecture(models.Model):
     order       = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True)
     video_file= models.FileField(upload_to='lectures/videos/', null=True, blank=True)
+    # video_file= CloudinaryField('lecture_videos', null=True, blank=True)
     LectureAttachment = models.FileField(upload_to='lectures/attachments/', null=True, blank=True)
+    # LectureAttachment= CloudinaryField('lecture_attachments', null=True, blank=True)
     LectureNoteFile= models.FileField(upload_to='lectures/notes/', null=True, blank=True)
+    # LectureNoteFile= CloudinaryField('lecture_notes', null=True, blank=True)
     lecture_notes = models.TextField(blank=True)
     
     class Meta:

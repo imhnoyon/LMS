@@ -7,7 +7,7 @@ from django.db.models import Q
 from datetime import timedelta
 from django.db import models
 import uuid
-
+from cloudinary.models import CloudinaryField
 
 User = get_user_model()
 
@@ -21,9 +21,11 @@ class Organization(models.Model):
     name = models.CharField(max_length=255)
     bio = models.TextField(blank=True, null=True, help_text="Short description about the organization")
     photo = models.ImageField(upload_to="org/photos/", blank=True, null=True)
+    # photo=CloudinaryField("photo", blank=True, null=True)
     banner = models.ImageField(upload_to="org/banners/", blank=True, null=True)
+    # banner=CloudinaryField("banner", blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
-    # email = models.EmailField(blank=True, help_text="Public contact email")
+
     
 
     rating = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])

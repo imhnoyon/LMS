@@ -3,7 +3,7 @@ from django.conf import settings
 import random
 import string
 import uuid
-
+from cloudinary.models import CloudinaryField
 
 # Create your models here.
 def generate_instructor_id():
@@ -39,6 +39,7 @@ class Instructor(models.Model):
     is_approved = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
     signature = models.ImageField(upload_to="signatures/", blank=True, null=True)
+    # signature=CloudinaryField('signature', blank=True, null=True)
     is_organization_instructor = models.BooleanField(default=False)
     stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_onboarding_completed = models.BooleanField(default=False)

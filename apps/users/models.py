@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 import uuid
-
+from cloudinary.models import CloudinaryField
 
 # Create your models here.
 class UserManager(BaseUserManager):
@@ -67,7 +67,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    # avatar=CloudinaryField('avatar', blank=True, null=True)
     signature = models.ImageField(upload_to="signatures/", blank=True, null=True)
+    # signature=CloudinaryField('signature', blank=True, null=True)
 
     is_verified = models.BooleanField(default=False)
     accepted_terms = models.BooleanField(default=False)
