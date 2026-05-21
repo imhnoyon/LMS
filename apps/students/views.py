@@ -25,7 +25,7 @@ class StudentDashboardView(APIView):
         enrollments = Enrollment.objects.filter(user=user)
 
         enrolled_courses_count = enrollments.count()
-        active_courses_count = enrollments.filter(is_started=True).count()
+        active_courses_count = enrollments.filter(is_started=True, is_completed=False).count()
         completed_courses_count = enrollments.filter(is_completed=True).count()
         recently_enrolled = [
             enrollment.course for enrollment in enrollments.order_by("-enrolled_at")[:6]
