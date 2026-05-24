@@ -279,10 +279,13 @@ class Invoice(models.Model):
     
     def save(self, *args, **kwargs):    
         if not self.invoice_id:
-            now    = timezone.now() 
-            prefix = f"INV-{now.year}-{now.month:02d}-"
-            count  = Invoice.objects.filter(invoice_id__startswith=prefix).count() + 1
-            self.invoice_id = f"{prefix}{count:03d}"
+            now = timezone.now()
+            prefix = f"INV-{now:%y%m%d}-"
+
+            while not self.invoice_id:
+                candidate = f"{prefix}{uuid.uuid4().hex[:8]}"
+                if not Invoice.objects.filter(invoice_id=candidate).exists():
+                    self.invoice_id = candidate
         super().save(*args, **kwargs)
  
     def __str__(self):

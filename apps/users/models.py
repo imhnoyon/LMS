@@ -103,6 +103,14 @@ class User(AbstractBaseUser, PermissionsMixin):
             return self.signature.url
         return None
 
+    @property
+    def full_name(self):
+        return self.name
+
+    @full_name.setter
+    def full_name(self, value):
+        self.name = value or ""
+
     def __str__(self):
         return f"{self.email} ({self.get_role_display()})"
 
