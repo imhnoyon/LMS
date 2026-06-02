@@ -1016,7 +1016,8 @@ class CoursesHomeView(APIView):
                 Q(subtitle__icontains=search) |
                 Q(topic__icontains=search) |
                 Q(language__icontains=search) |
-                Q(level__icontains=search)
+                Q(level__icontains=search)|
+                Q(category__name__iexact=search) 
             )
 
         if category:

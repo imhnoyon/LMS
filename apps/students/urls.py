@@ -12,6 +12,7 @@ urlpatterns = [
 
     # 🔹 Quiz Attendance
     path("quizzes/<int:quiz_id>/", StudentQuizView.as_view(), name="student-quiz-take"),
+    path("quizzes/<int:quiz_id>/random/", StudentQuizRandomView.as_view(), name="student-quiz-random"),
     path("quizzes/<int:quiz_id>/submit/", QuizSubmissionView.as_view(), name="student-quiz-submit"),
     
     

@@ -1,3 +1,5 @@
+import random
+
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -185,6 +187,26 @@ class StudentQuizView(APIView):
             "title": quiz.title, "description": quiz.description,
             "time_limit": quiz.time_limit_minutes,
             "questions": StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data,
+            "is_completed": is_completed
+        })
+        
+
+# retake quiz with random question order if already completed   
+class StudentQuizRandomView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, quiz_id):
+        quiz = get_object_or_404(Quiz.objects.prefetch_related("questions__options"), id=quiz_id)
+        is_completed = QuizAttempt.objects.filter(user=request.user, quiz=quiz).exists()
+        questions = StudentQuizQuestionSerializer(quiz.questions.all(), many=True).data
+
+        if is_completed:
+            questions = list(questions)
+            random.shuffle(questions)
+
+        return APIResponse.success(data={
+            "title": quiz.title, "description": quiz.description,
+            "time_limit": quiz.time_limit_minutes,
+            "questions": questions,
             "is_completed": is_completed
         })
         

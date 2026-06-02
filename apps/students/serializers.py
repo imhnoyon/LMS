@@ -153,9 +153,33 @@ class RecentlyEnrolledCourseSerializer(serializers.ModelSerializer):
 
 class StudentInvoiceSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="user.name", read_only=True)
+    course_title = serializers.SerializerMethodField()
     class Meta:
         model = Invoice
-        fields = ["id", "name", "invoice_id", "payment_method", "amount", "status", "invoice_date", "created_at"]
+        fields = ["id", "name", "course_title", "invoice_id", "payment_method", "amount", "status", "invoice_date", "created_at"]
+        
+    def get_course_title(self, obj):
+        from apps.orders.models import OrderItem
+
+        order_item = (
+            OrderItem.objects.select_related("course", "order")
+            .filter(order__user=obj.user, order__status="paid", order__created_at__date=obj.invoice_date)
+            .order_by("order__created_at")
+            .first()
+        )
+
+        if not order_item:
+            order_item = (
+                OrderItem.objects.select_related("course", "order")
+                .filter(order__user=obj.user, order__status="paid")
+                .order_by("-order__created_at")
+                .first()
+            )
+
+        if order_item and order_item.course:
+            return order_item.course.title
+
+        return "N/A"
 
 class DashboardQuizAttemptSerializer(serializers.ModelSerializer):
     quiz_title = serializers.CharField(source="quiz.title", read_only=True)
@@ -504,10 +528,11 @@ class StudentCertificateSerializer(serializers.ModelSerializer):
     date = serializers.DateField(source="issue_date", format="%d %b %Y", read_only=True)
     marks = serializers.SerializerMethodField()
     out_of = serializers.SerializerMethodField()
+    signature = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
-        fields = ['id', 'course_name','student_name', 'date', 'marks', 'out_of']
+        fields = ['id', 'course_name','student_name', 'date', 'marks', 'out_of', 'signature']
 
     def get_marks(self, obj):
         from apps.courses.models import QuizAttempt
@@ -532,6 +557,28 @@ class StudentCertificateSerializer(serializers.ModelSerializer):
             if last_attempt:
                 total += last_attempt.total_questions
         return total
+    
+    
+    def get_signature(self, obj):
+        request = self.context.get("request")
+        course = getattr(getattr(obj, "enrollment", None), "course", None)
+        if not course:
+            return None
+
+        signature_file = None
+
+        instructor_profile = getattr(course.instructor, "instructor", None)
+        if instructor_profile and getattr(instructor_profile, "signature", None):
+            signature_file = instructor_profile.signature
+        elif getattr(course.instructor, "signature", None):
+            signature_file = course.instructor.signature
+
+        if not signature_file:
+            return None
+
+        if request:
+            return request.build_absolute_uri(signature_file.url)
+        return signature_file.url 
     
     
     
