@@ -294,7 +294,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5368709120
 
 # Max single file size
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5368709120  
-FONTEND_ULR = os.getenv("FONTEND_ULR", "http://localhost:3001")
+FONTEND_ULR = os.getenv("FONTEND_ULR", "http://localhost:3000")
 FONTEND_SUCCESSFUL_URL = os.getenv("FONTEND_SUCCESSFUL_URL", "https://lms-web-teal.vercel.app/en/enrolled-courses")
 
 
