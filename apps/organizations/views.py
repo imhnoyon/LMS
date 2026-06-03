@@ -686,7 +686,7 @@ class CourseListByOrganizationView(APIView):
         if not membership:
             courses = Course.objects.none()
         else:
-            courses = Course.objects.filter(organization=membership.organization).order_by('-id')
+            courses = Course.objects.filter(organization=membership.organization,status="accepted").order_by('-id')
         
 
         if search:

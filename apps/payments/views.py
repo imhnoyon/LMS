@@ -121,9 +121,6 @@ class CreateStripeCheckoutSessionView(APIView):
             )
             
 
-
-
-
 @method_decorator(csrf_exempt, name="dispatch")
 class StripeWebhookView(APIView):
     authentication_classes = []
@@ -428,7 +425,7 @@ class StripeWebhookView(APIView):
             if instructor.id == student.id:
                 continue
 
-            # Only create conversation if an enrollment exists (safety check)
+            # Only create conversation if an enrollment exists 
             enrolled = Enrollment.objects.filter(user=student, course=course).exists()
             if not enrolled:
                 continue

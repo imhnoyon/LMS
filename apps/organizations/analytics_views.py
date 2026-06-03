@@ -79,6 +79,8 @@ class DashboardStatisticsView(OrganizationAnalyticsMixin, APIView):
         if error:
             return error
 
+        org_membership = self.get_user_organization(request.user)
+
         # Parse date filters
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
@@ -94,6 +96,29 @@ class DashboardStatisticsView(OrganizationAnalyticsMixin, APIView):
                 )
 
         summary = analytics.get_dashboard_summary(start_date, end_date)
+
+        total_revenue = (
+            Commission.objects.filter(user=org_membership.user)
+            .aggregate(total=Sum("commission_amount"))["total"]
+            or Decimal("0.00")
+        )
+        today_revenue = (
+            Commission.objects.filter(user=org_membership.user, created_at__date=timezone.now().date())
+            .aggregate(total=Sum("commission_amount"))["total"]
+            or Decimal("0.00")
+        )
+        average_course_price = (
+            Course.objects.filter(
+                organization=org_membership.organization,
+                status__in=['accepted', 'featured', 'published']
+            ).aggregate(avg_price=Avg("price"))["avg_price"]
+            or Decimal("0.00")
+        )
+
+        summary["total_revenue"] = total_revenue
+        summary["today_revenue"] = today_revenue
+        summary["average_course_price"] = float(average_course_price)
+
         serializer = DashboardSummarySerializer(summary)
 
         return APIResponse.success(
@@ -129,6 +154,8 @@ class RevenueTrendsView(OrganizationAnalyticsMixin, APIView):
         if error:
             return error
 
+        org_membership = self.get_user_organization(request.user)
+
         year = request.query_params.get('year')
         months_param = request.query_params.get('months')
         months_count = request.query_params.get('months_count')
@@ -136,6 +163,13 @@ class RevenueTrendsView(OrganizationAnalyticsMixin, APIView):
         try:
             if year:
                 year = int(year)
+            else:
+                year = timezone.now().year
+
+            commission_query = Commission.objects.filter(
+                user=org_membership.user,
+                created_at__year=year,
+            )
             
             # If specific months are provided, use them
             if months_param:
@@ -147,7 +181,27 @@ class RevenueTrendsView(OrganizationAnalyticsMixin, APIView):
                             message="Month numbers must be between 1 and 12.",
                             status_code=status.HTTP_400_BAD_REQUEST
                         )
-                    revenue_data = analytics.get_revenue_by_specific_months(year, months)
+
+                    month_rows = (
+                        commission_query
+                        .filter(created_at__month__in=months)
+                        .annotate(month=TruncMonth("created_at"))
+                        .values("month")
+                        .annotate(total=Sum("commission_amount"))
+                        .order_by("month")
+                    )
+                    month_map = {
+                        row["month"].month: (row["total"] or Decimal("0.00"))
+                        for row in month_rows
+                    }
+                    revenue_data = [
+                        {
+                            "month": month_num,
+                            "label": date(year, month_num, 1).strftime("%b"),
+                            "amount": month_map.get(month_num, Decimal("0.00")),
+                        }
+                        for month_num in months
+                    ]
                 except ValueError:
                     return APIResponse.error(
                         message="Invalid months format. Use comma-separated numbers (1-12).",
@@ -164,7 +218,27 @@ class RevenueTrendsView(OrganizationAnalyticsMixin, APIView):
                         )
                 else:
                     months_count = 12
-                revenue_data = analytics.get_revenue_by_month(year, months_count)
+
+                month_rows = (
+                    commission_query
+                    .filter(created_at__month__lte=months_count)
+                    .annotate(month=TruncMonth("created_at"))
+                    .values("month")
+                    .annotate(total=Sum("commission_amount"))
+                    .order_by("month")
+                )
+                month_map = {
+                    row["month"].month: (row["total"] or Decimal("0.00"))
+                    for row in month_rows
+                }
+                revenue_data = [
+                    {
+                        "month": month_num,
+                        "label": date(year, month_num, 1).strftime("%b"),
+                        "amount": month_map.get(month_num, Decimal("0.00")),
+                    }
+                    for month_num in range(1, months_count + 1)
+                ]
         except (ValueError, TypeError):
             return APIResponse.error(
                 message="Invalid parameters. year must be integer, months must be comma-separated numbers.",
@@ -196,6 +270,13 @@ class DailyRevenueChartView(OrganizationAnalyticsMixin, APIView):
         if error:
             return error
 
+        org_membership = self.get_user_organization(request.user)
+        total_revenue = (
+            Commission.objects.filter(user=org_membership.user)
+            .aggregate(total=Sum("commission_amount"))["total"]
+            or Decimal("0.00")
+        )
+
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
@@ -220,14 +301,40 @@ class DailyRevenueChartView(OrganizationAnalyticsMixin, APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        revenue_data = analytics.get_revenue_by_date_range(start_date, end_date)
+        commission_rows = (
+            Commission.objects.filter(
+                user=org_membership.user,
+                created_at__date__range=[start_date, end_date]
+            )
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(amount=Sum("commission_amount"))
+            .order_by("date")
+        )
+
+        daily_map = {
+            row["date"]: row["amount"] or Decimal("0.00")
+            for row in commission_rows
+        }
+
+        revenue_data = []
+        current_date = start_date
+        while current_date <= end_date:
+            revenue_data.append({
+                "date": current_date,
+                "amount": daily_map.get(current_date, Decimal("0.00")),
+            })
+            current_date += timedelta(days=1)
+
         serializer = DailyRevenueChartSerializer(revenue_data, many=True)
 
-        return APIResponse.success(
+        response = APIResponse.success(
             message="Daily revenue chart retrieved successfully.",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+        response.data["total_revenue"] = total_revenue
+        return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -247,14 +354,26 @@ class CourseAnalyticsView(OrganizationAnalyticsMixin, APIView):
         if error:
             return error
 
+        org_membership = self.get_user_organization(request.user)
+        total_revenue = (
+            Commission.objects.filter(user=org_membership.user)
+            .aggregate(total=Sum("commission_amount"))["total"]
+            or Decimal("0.00")
+        )
+
         course_stats = analytics.get_course_enrollment_stats()
+        
         
         paginator = self.pagination_class()
         paginated_data = paginator.paginate_queryset(course_stats, request, view=self)
         serializer = CourseAnalyticsSerializer(paginated_data, many=True)
+        serialized_data = serializer.data
+
+        for item in serialized_data:
+            item["total_revenue"] = total_revenue
 
         return paginator.get_paginated_response(
-            serializer.data,
+            serialized_data,
             message="Course analytics retrieved successfully."
         )
 
@@ -275,6 +394,13 @@ class TopCoursesView(OrganizationAnalyticsMixin, APIView):
         if error:
             return error
 
+        org_membership = self.get_user_organization(request.user)
+        total_revenue = (
+            Commission.objects.filter(user=org_membership.user)
+            .aggregate(total=Sum("commission_amount"))["total"]
+            or Decimal("0.00")
+        )
+
         limit = request.query_params.get('limit', 5)
         try:
             limit = min(int(limit), 20)
@@ -283,10 +409,14 @@ class TopCoursesView(OrganizationAnalyticsMixin, APIView):
 
         top_courses = analytics.get_top_courses(limit)
         serializer = TopCourseSerializer(top_courses, many=True)
+        serialized_data = serializer.data
+
+        for item in serialized_data:
+            item['revenue'] = total_revenue
 
         return APIResponse.success(
             message="Top courses retrieved successfully.",
-            data=serializer.data,
+            data=serialized_data,
             status_code=status.HTTP_200_OK
         )
 

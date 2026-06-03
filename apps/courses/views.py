@@ -638,6 +638,7 @@ class CourseListByInstructorView(APIView):
         category = request.query_params.get('category')
         status_param = request.query_params.get('status')
         courses = Course.objects.filter(instructor=request.user, status="accepted").order_by("-id")
+        # courses = Course.objects.filter(instructor=request.user,).order_by("-id")
     
         if search:
             courses = courses.filter(
