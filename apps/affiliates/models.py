@@ -59,7 +59,7 @@ class Affiliate(models.Model):
     tax_id = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
 
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.10)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.10) # 10% default commission
     stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_onboarding_completed = models.BooleanField(default=False)
     total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=0)

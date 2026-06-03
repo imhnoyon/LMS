@@ -179,7 +179,8 @@ class GenerateAffiliateCourseLinkView(APIView):
         )
 
         # Dynamically grab the frontend's exact URL (whether localhost or production)
-        base_frontend_url = request.headers.get("Origin")
+        # base_frontend_url = request.headers.get("Origin")
+        base_frontend_url = "http://localhost:3000"
         if not base_frontend_url:
             base_frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:8002")
             
