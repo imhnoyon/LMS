@@ -4,6 +4,8 @@ from . import views
 urlpatterns = [
     # Admin can create categories (for now, we can create them via admin panel)
     path('categories/', views.CategoryAPIView.as_view()),
+    path('categories/<int:pk>/', views.CategoryAPIView.as_view()),
+    
     path('courses-list/', views.CourseListView.as_view(), name='course-list'),
     path('courses-lists/', views.CourseListapiView.as_view(), name='course-list'),
     path('courses-list/<int:pk>/', views.courseDetail.as_view(), name='course-list'),

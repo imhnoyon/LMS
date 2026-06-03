@@ -46,21 +46,27 @@ class CategoryAPIView(APIView):
     # permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        search = request.query_params.get('search')
+        search = request.query_params.get('search', '').strip()
+        category = request.query_params.get('category', '').strip()
 
         categories = Category.objects.all().order_by('-created_at')
 
         if search:
             categories = categories.filter(
-                Q(name__icontains=search) |
-                Q(slug__icontains=search)
+                Q(name__icontains=search) 
+               
             )
+            
+        if category:
+            if category.isdigit():
+                categories = categories.filter(pk=int(category))
+            else:
+                categories = categories.filter(
+                    Q(name__iexact=category) 
+                  
+                )
 
-        serializer = CategorySerializer(
-            categories,   
-            many=True,
-            context={"request": request}
-        )
+        serializer = CategorySerializer(categories,many=True,context={"request": request})
 
         return APIResponse.success(
             data=serializer.data,
@@ -73,6 +79,21 @@ class CategoryAPIView(APIView):
             serializer.save()
             return APIResponse.success(data=serializer.data, status_code=status.HTTP_201_CREATED)
         return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
+    def patch(self, request, pk):
+        category = get_object_or_404(Category, pk=pk)
+        serializer = CategorySerializer(category, data=request.data, partial=True, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(data=serializer.data)
+        return APIResponse.error(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    
+    def delete(self, request, pk):
+        Category.objects.filter(pk=pk).delete()
+        return APIResponse.success(message="Category deleted successfully.")
 
 # ── Step 1: Create course (Basic Info) 
 class CourseCreateView(APIView):
@@ -597,8 +618,8 @@ class CourseListView(APIView):
     paginator_class = CustomPagination
 
     def get(self, request):
-        search = request.query_params.get('search')
-        category = request.query_params.get('category')
+        search = request.query_params.get('search', '').strip()
+        category = request.query_params.get('category', '').strip()
         status_param = request.query_params.get('status')
 
         courses = Course.objects.all().order_by('-id')
@@ -609,11 +630,23 @@ class CourseListView(APIView):
                 Q(subtitle__icontains=search) |
                 Q(topic__icontains=search) |
                 Q(language__icontains=search) |
-                Q(level__icontains=search)
-            )
+                Q(level__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(instructor__name__icontains=search) |
+                Q(instructor__email__icontains=search) |
+                Q(organization__name__icontains=search) |
+                Q(organization__memberships__role=Membership.Role.ADMIN, organization__memberships__user__name__icontains=search) |
+                Q(organization__memberships__role=Membership.Role.ADMIN, organization__memberships__user__email__icontains=search)
+            ).distinct()
 
         if category:
-            courses = courses.filter(category__name__iexact=category)
+            if category.isdigit():
+                courses = courses.filter(category_id=int(category))
+            else:
+                courses = courses.filter(
+                    Q(category__name__iexact=category) 
+                   
+                )
         if status_param:
             courses = courses.filter(status__iexact=status_param)
 
@@ -871,8 +904,8 @@ class CourseListapiView(APIView):
     paginator_class = CustomPagination
 
     def get(self, request):
-        search = request.query_params.get('search')
-        category = request.query_params.get('category')
+        search = request.query_params.get('search', '').strip()
+        category = request.query_params.get('category', '').strip()
         status_param = request.query_params.get('status')
 
         courses = Course.objects.filter(status='published').order_by('-id')
@@ -883,11 +916,24 @@ class CourseListapiView(APIView):
                 Q(subtitle__icontains=search) |
                 Q(topic__icontains=search) |
                 Q(language__icontains=search) |
-                Q(level__icontains=search)
-            )
+                Q(level__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(category__slug__icontains=search) |
+                Q(instructor__name__icontains=search) |
+                Q(instructor__email__icontains=search) |
+                Q(organization__name__icontains=search) |
+                Q(organization__memberships__role=Membership.Role.ADMIN, organization__memberships__user__name__icontains=search) |
+                Q(organization__memberships__role=Membership.Role.ADMIN, organization__memberships__user__email__icontains=search)
+            ).distinct()
 
         if category:
-            courses = courses.filter(category__name__iexact=category)
+            if category.isdigit():
+                courses = courses.filter(category_id=int(category))
+            else:
+                courses = courses.filter(
+                    Q(category__name__iexact=category) |
+                    Q(category__slug__iexact=category)
+                )
         if status_param:
             courses = courses.filter(status__iexact=status_param)
 

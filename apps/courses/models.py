@@ -9,7 +9,6 @@ from cloudinary.models import CloudinaryField
 
 class Category(models.Model):
     name        = models.CharField(max_length=100, unique=True)
-    slug        = models.SlugField(unique=True)
     description = models.TextField(null=True, blank=True)
     parent      = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='subcategories')
     created_at  = models.DateTimeField(auto_now_add=True)

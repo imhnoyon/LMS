@@ -9,7 +9,7 @@ import json
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'description', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at']
 
 
 class CourseBasicSerializer(serializers.ModelSerializer):
