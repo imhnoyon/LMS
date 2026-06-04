@@ -918,7 +918,6 @@ class CourseListapiView(APIView):
                 Q(language__icontains=search) |
                 Q(level__icontains=search) |
                 Q(category__name__icontains=search) |
-                Q(category__slug__icontains=search) |
                 Q(instructor__name__icontains=search) |
                 Q(instructor__email__icontains=search) |
                 Q(organization__name__icontains=search) |
@@ -931,8 +930,8 @@ class CourseListapiView(APIView):
                 courses = courses.filter(category_id=int(category))
             else:
                 courses = courses.filter(
-                    Q(category__name__iexact=category) |
-                    Q(category__slug__iexact=category)
+                    Q(category__name__iexact=category) 
+                   
                 )
         if status_param:
             courses = courses.filter(status__iexact=status_param)

@@ -32,9 +32,7 @@ class UnverifiedOrganizationListView(APIView):
 
     def get(self, request):
         search = request.query_params.get("search", "")
-        organizations = Organization.objects.filter(
-            is_verified=False
-        ).order_by("-created_at")
+        organizations = Organization.objects.filter(is_verified=False).order_by("-created_at")
 
         if search:
             organizations = organizations.filter(
@@ -91,17 +89,18 @@ class RejectOrganizationView(APIView):
 
     def delete(self, request, pk):
         organization = get_object_or_404(Organization, pk=pk)
-
-        organization.is_active = False
-        organization.save(update_fields=["is_active"])
-
+        organization.delete()
         return APIResponse.success(
             message="Organization rejected successfully.",
             data={},
             status_code=status.HTTP_200_OK
         )
 
-# 🚀 View to invite a member/instructor to organization
+
+
+       
+
+#  View to invite a member/instructor to organization
 class InviteInstructorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -782,8 +781,9 @@ class OrganizationAdminListAPIView(APIView):
         if search:
             organizations = organizations.filter(
                 Q(name__icontains=search) |
-                Q(email__icontains=search) |
                 Q(phone__icontains=search) |
+                Q(verified_by__name__icontains=search) |
+                Q(verified_by__email__icontains=search) |
                 Q(memberships__role=Membership.Role.ADMIN, memberships__user__name__icontains=search) |
                 Q(memberships__role=Membership.Role.ADMIN, memberships__user__email__icontains=search)
             ).distinct()
