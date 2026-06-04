@@ -474,19 +474,68 @@ class InstructorEarningsView(APIView):
         
         
 # Withdrawal Request List
+# class WithdrawalRequestListView(APIView):
+#     permission_classes = [IsAuthenticated, IsAdminUser]  
+#     pagination_class = CustomPagination
+
+#     def get(self, request):
+#         search=request.query_params.get("search","").strip()
+#         role=request.query_params.get("role","").strip().lower()
+#         status=request.query_params.get("status","").strip().lower()
+        
+#         withdrawals = Withdrawal.objects.filter(
+#             status__in=["pending", "completed", "rejected"]
+#         ).select_related("user").order_by("-requested_at")
+
+#         paginator = self.pagination_class()
+#         paginated_data = paginator.paginate_queryset(withdrawals, request)
+
+#         serializer = WithdrawalRequestSerializer(paginated_data, many=True,context={"request": request})
+
+#         return paginator.get_paginated_response(serializer.data)
+
+
+from django.db.models import Q
+
 class WithdrawalRequestListView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]  
+    permission_classes = [IsAuthenticated, IsAdminUser]
     pagination_class = CustomPagination
 
     def get(self, request):
-        withdrawals = Withdrawal.objects.filter(
+        search = request.query_params.get("search", "").strip()
+        role = request.query_params.get("role", "").strip().lower()
+        status_param = request.query_params.get("status", "").strip().lower()
+
+        withdrawals = Withdrawal.objects.select_related("user").filter(
             status__in=["pending", "completed", "rejected"]
-        ).select_related("user").order_by("-requested_at")
+        )
+
+        # Search by name or email
+        if search:
+            withdrawals = withdrawals.filter(
+                Q(user__name__icontains=search)
+                | Q(user__name__icontains=search)
+                | Q(user__email__icontains=search)
+            )
+
+        # Filter by role
+        if role:
+            withdrawals = withdrawals.filter(user__role__iexact=role)
+
+        # Filter by status
+        if status_param:
+            withdrawals = withdrawals.filter(status__iexact=status_param)
+
+        withdrawals = withdrawals.order_by("-requested_at")
 
         paginator = self.pagination_class()
         paginated_data = paginator.paginate_queryset(withdrawals, request)
 
-        serializer = WithdrawalRequestSerializer(paginated_data, many=True)
+        serializer = WithdrawalRequestSerializer(
+            paginated_data,
+            many=True,
+            context={"request": request}
+        )
 
         return paginator.get_paginated_response(serializer.data)
 

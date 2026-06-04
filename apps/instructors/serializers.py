@@ -194,9 +194,18 @@ class InstructorEarningsSerializer(serializers.Serializer):
 # Withdraw request serializer
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.name", read_only=True)
+    user_role= serializers.CharField(source="user.role", read_only=True)
+    user_image = serializers.SerializerMethodField()
+    email= serializers.EmailField(source="user.email", read_only=True)
     class Meta:
         model = Withdrawal
-        fields = ['id','withdraw_id', 'user_name', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at']
+        fields = ['id','withdraw_id', 'user_name', 'user_role','email', 'bank_name', 'bank_last4', 'amount', 'status', 'requested_at','user_image']
+        
+    def get_user_image(self, obj):
+        if obj.user.avatar:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.user.avatar.url) if request else obj.user.avatar.url
+        return None
         
         
         
